@@ -87,15 +87,84 @@ def align_seqs (sequences=None, maxiters=12, infile=None, outfile=None):
         os.system("rm -f " + ofl)
     return aligned
 
+def lowlevel_parse_cigar (s):
+    out = list(); ind = len(s)-1
+    while ind >= 0:
+        let = s[ind]; ind -= 1; num = ''
+        while s[ind] not in {'M','D','I','S','H','=','X'}:  num += s[ind]; ind -= 1
+        out.append((let, int(num[::-1])))
+    return out[::-1]
+
+def minimap2_align_seqs (sequences=None, infile = None, reference_path = None, prefix = "/tmp/", n_threads = 4):
+    """ todo: we dont need the ref genome .mmi, we can use the ref genome directly, and use seqio.write() """
+    if (sequences is None) and (infile is None):
+        print ("ERROR: You must give me a fasta object or file")
+    if prefix is None: prefix = "./"
+    if infile is None: ifl = f"{prefix}/minimap2.fasta"
+    if sequences:      SeqIO.write(sequences, ifl, "fasta") ## else it should be present in infile
+    samfile = f"{prefix}/minimap2.sam"
+
+    index_path = '%s.mmi' % reference_path
+    if not os.path.isfile(index_path):
+        runstr = f"minimap2 -t {n_threads} -d {index_path} {reference_path}"
+        proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)    
+
+    runstr = f"minimap2 -ax asm5 -t {n_threads} -o {samfile} {index_path} {ifl}" # preset for div < 1%
+    #runstr = f"minimap2 -a -t {n_threads} -o {prefix}/minimap2.sam -d {index_path} {ifl}" # no presets
+    proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)
+    
+    ## SAM to FASTA (by https://github.com/niemasd)
+    ref_seq = []
+    for line in open(reference_path):
+        l = line.strip()
+        if len(l) == 0:   continue
+        if l[0] != '>':   ref_seq.append(l)
+    ref_seq = ''.join(ref_seq)
+    align = []
+    for line in open(samfile):
+        l = line.rstrip('\n')
+        if len(l) == 0 or l[0] == '@':  continue
+        parts = l.split('\t')
+        flags = int(parts[1])
+        if flags != 0 and flags != 16:  continue
+        ID = parts[0].strip()
+        ref_ind = int(parts[3])-1
+        cigar = parts[5].strip()
+        seq = parts[9].strip()
+        edits = parse_cigar(cigar)
+        this_sequence_name = ID
+        if ref_ind > 0:  this_sequence = '-' * ref_ind # write gaps before alignment
+        else:            this_sequence = ""  ## no gaps
+        ind = 0; seq_len = ref_ind
+        for e, e_len in edits:
+            if e == 'M' or e == '=' or e == 'X': # (mis)match)
+                this_sequence += seq[ind:ind+e_len]; ind += e_len; seq_len += e_len
+            elif e == 'D':                       # deletion (gap in query)
+                this_sequence += '-' * e_len; seq_len += e_len
+            elif e == 'I':                       # insertion (gap in reference; ignore)
+                ind += e_len
+            elif e == 'S' or e == 'H':           # starting/ending segment of query not in reference (i.e., span of insertions; ignore)
+                ind += e_len
+        if seq_len < len(ref_seq):
+            this_sequence += '-' * (len(ref_seq)-seq_len) # write gaps after alignment
+        align.append (SeqRecord(Seq.Seq(this_sequence,Alphabet.IUPAC.ambiguous_dna), id=this_sequence_name, description=this_sequence_name))
+     
+    if infile is None:
+        os.system(f"rm -f {ifl}")
+    os.system(f"rm -f {samfile}")
+    return align
+
+## TODO: using reference MN908947.3, trim to [265, 29675]
 def rapidnj_from_alignment (sequences = None, infile = None, outfile = None, prefix = "/tmp/", n_threads = 4):
     if (sequences is None) and (infile is None):
         print ("ERROR: You must give me an alignment object or file")
     if prefix is None: prefix = "./"
-    if infile is None: ifl = prefix + "/rapidnj.fasta"
+    if infile is None: ifl = prefix + "/rapidnj.aln"
     else:              ifl = infile
     if outfile is None: ofl = prefix + "/rapidnj.tree"
     else:               ofl = outfile
-    SeqIO.write(sequences, ifl, "fasta")
+    if sequences:       SeqIO.write(sequences, ifl, "fasta") # otherwise we assume sequence file exists 
+
     runstr = "rapidnj " + ifl + " -i fa -t d -n -c " + str(n_threads) + " -x " + ofl 
     proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)    
     tree = ete3.Tree (ofl)
