@@ -232,9 +232,10 @@ def score_to_distance_matrix_fraction (scoremat, mafft = False):
             distmat[i,j] = distmat[j,i] = 1. - scoremat[i,j]/min(scoremat[i,i],scoremat[j,j])
     return distmat
 
-def df_read_genome_metadata (filename, primary_key = "sequence_name", rename_dict = "default", index_name = "seq_uid", exclude_na_rows = None, exclude_columns = None):
+def df_read_genome_metadata (filename, primary_key = "sequence_name", rename_dict = "default", sep=',', compression="infer", 
+        index_name = "peroba_seq_uid", remove_edin = True, exclude_na_rows = None, exclude_columns = "default"):
     ''' Read CSV data using "sequence_name" as primary key 
-    TODO: there are sequences with same name (e.g. distinct assemblies), currently only one is kept.
+    TODO: there are sequences with same name (e.g. distinct assemblies), currently only one is kept. 
     I could create a column combination (multi-index?) to keep all
     '''
     if rename_dict == "default":
@@ -244,24 +245,40 @@ def df_read_genome_metadata (filename, primary_key = "sequence_name", rename_dic
             'date':'collection_date',
             'sex':'source_sex',
             'age':'source_age'}
+    if exclude_na_rows == "default": ## better NOT to set this up here (only at finalise_data())
+        exclude_na_rows = ['collection_date','sequence_name','lineage', 'adm2', 'days_since_Dec19']
+    if exclude_columns == "default":
+        exclude_columns = ["is_travel_history","is_surveillance","is_hcw", "is_community", "outer_postcode", "travel_history"]
 
-    #exclude_columns = ["is_travel_history","is_surveillance","is_hcw", "is_community", "outer_postcode", "travel_history"]
-    df1 = pd.read_csv (str(filename))
-    df1.set_index (str(primary_key), drop = False, inplace = True) # dont drop the column to be used as index
-    df1.dropna (subset=[str(primary_key)], inplace = True); # now we have a column and an index with same name
-    df1.rename_axis(str(index_name), inplace = True) # equiv. to df.index.name="seq_uid"
+    df1 = pd.read_csv (str(filename), compression=compression, sep=sep) # sep='\t' for gisaid
 
-    # fix column names 
+    # fix column names  
     if rename_dict:
         for old, new in rename_dict.items():
             if old in list(df1.columns): ## I expected pandas to do this check...
                 df1.rename(columns={old:new}, inplace=True)
+    if remove_edin: # EDINBURGH custom labels have an "edin" prefix
+        no_edin = {x:x.replace("edin_", "") for x in list(df1.columns) if x.startswith("edin_")}
 
     # reduce table by removing whole columns and rows with missing information
     if exclude_na_rows: # list of important columns, such that rows missing it should be removed
-        df1.dropna (subset = exclude_na_rows, inplace = True);
+        important_cols = [x for x in exclude_na_rows if x in list(df1.columns)]
+        if important_cols:
+            df1.dropna (subset = important_cols, inplace = True);
+
+    #EX: exclude_columns = ["is_travel_history","is_surveillance","is_hcw", "is_community", "outer_postcode", "travel_history"]
     if exclude_columns: # list of irrelevant columns
-        df1.drop (labels = exclude_columns, axis=1, inplace = True) # no sample with this information
+        irrelevant_cols = [x for x in exclude_columns if x in list(df1.columns)]
+        if irrelevant_cols:
+            df1.drop (labels = irrelevant_cols, axis=1, inplace = True) # no sample with this information
+
+    if index_name not in list(df1.columns): # regular CSV file from external source
+        df1.set_index (str(primary_key), drop = False, inplace = True) # dont drop the column to be used as index
+        df1.dropna (subset=[str(primary_key)], inplace = True); # now we have a column and an index with same name
+        df1.rename_axis(str(index_name), inplace = True) # equiv. to df.index.name="peroba_seq_uid"
+    else:
+        df1.set_index (str(index_name), drop = True, inplace = True) # drop the column to avoid having both with same name
+
     df1 = df1.groupby(df1.index).aggregate("first"); # duplicated indices are allowed in pandas
     return df1
 
@@ -273,11 +290,13 @@ def df_merge_metadata_by_index (df1, df2): # merge by replacing NA whenever poss
     df1.sort_index(inplace=True)
     return df1
 
-def df_finalise_metadata (df, exclude_na_rows = None):
+def df_finalise_metadata (df, exclude_na_rows = None, exclude_columns = "default", remove_duplicate_columns = True):
     ''' if exclude_na_rows is the string "default" then we use sensible choices
     '''
     if exclude_na_rows == "default":
         exclude_na_rows = ['collection_date','sequence_name','lineage', 'adm2', 'days_since_Dec19']
+    if exclude_columns == "default":
+        exclude_columns = ["is_travel_history","is_surveillance","is_hcw", "is_community", "outer_postcode", "travel_history"]
 
     df['days_since_Dec19'] = df['collection_date'].map(lambda a: get_days_since_2019(a, impute = True))
     df = df.sort_values(by=['lineage_support', 'days_since_Dec19'], ascending=[False, True])
@@ -289,8 +308,17 @@ def df_finalise_metadata (df, exclude_na_rows = None):
     if not exclude_na_rows or "adm2" not in exclude_na_rows:
         df['adm2'].fillna(df.country, inplace=True)
 
-    if exclude_na_rows:
-        df = df.dropna(subset=exclude_na_rows);
+    if exclude_na_rows: # list of important columns, such that rows missing it should be removed
+        important_cols = [x for x in exclude_na_rows if x in list(df.columns)]
+        if important_cols:
+            df.dropna (subset = important_cols, inplace = True);
+    if exclude_columns: # list of irrelevant columns
+        irrelevant_cols = [x for x in exclude_columns if x in list(df.columns)]
+        if irrelevant_cols:
+            df.drop (labels = irrelevant_cols, axis=1, inplace = True) # no sample with this information
+
+    if remove_duplicate_columns: # who knows which column it will choose (i.e. column names)
+        df = df.T.drop_duplicates().T # transpose, remove duplicate rows, and transpose again
     return df
 
 def get_ancestral_trait_subtrees (tre, csv,  tiplabel_in_csv = "sequence_name", elements = 1, 
