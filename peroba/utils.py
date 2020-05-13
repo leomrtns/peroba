@@ -181,9 +181,6 @@ def snpsites_from_alignment (sequences = None, infile = None, outfile = None, pr
 
     return snps
 
-iupac_dna = {''.join(sorted(v)):k for k,v in Seq.IUPAC.IUPACData.ambiguous_dna_values.items()}
-
-## TODO: using reference MN908947.3, trim to [265, 29675]
 def rapidnj_from_alignment (sequences = None, infile = None, outfile = None, prefix = "/tmp/", n_threads = 4):
     if (sequences is None) and (infile is None):
         print ("ERROR: You must give me an alignment object or file")
@@ -196,7 +193,8 @@ def rapidnj_from_alignment (sequences = None, infile = None, outfile = None, pre
 
     runstr = "rapidnj " + ifl + " -i fa -t d -n -c " + str(n_threads) + " -x " + ofl 
     proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)    
-    tree = ete3.Tree (ofl)
+    treestring = open(ofl).readline().rstrip().replace("\'","").replace("\"","").replace("[&R]","")
+    tree = ete3.Tree (treestring)
     if infile is None:  os.system("rm -f " + ifl)
     #else:               os.system("bzip2 -f " + ifl) ## all fasta files shall be bzipped 
     if outfile is None: os.system("rm -f " + ofl)

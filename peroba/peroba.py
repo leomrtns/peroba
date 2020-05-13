@@ -18,20 +18,24 @@ class DataSeqTree:   ## python3 doesn't use base class object anymore ;)
     tree_leaves = None    # dictionary with {name:node}
     tree_needs_update = False # by default missing tree leaves do not remove samples (since we can reestimate tree) 
     sequences = None      # dictionary with sename:SeqRecord(); peroba.utils and other lowlevel use a lot of lists of SeqRecord()
-    file_prefix = "peroba."
-    file_suffix = {
+    f_prefix = None
+    f_suffix = {
             "metadata": ".metadata.csv.gz",
             "tree": ".tree.nhx",
-            "sequences": ".unaligned.fasta.bz2",
-            "alignment": ".alignment.aln.bz2"
+            "sequences": ".sequences.fasta.bz2"
             }
                 
 
-    def __init__ (self, prefix=None, treefile=None, raw_metadata_filelist=None, sequence_filelist = None, input_path = None, peroba_db_path = None): 
+    def __init__ (self, prefix=None, timestamp = None, treefile=None, raw_metadata_filelist=None, 
+            sequence_filelist = None, input_path = None, peroba_db_path = None): 
+        """ timestamp overwrites whole file ID (prefix+time-of-day), while prefix changes only the 
+        beginning (ToD still updated) 
+        """
         if peroba_db_path: self.db_path = peroba_db_path
         else: self.db_path = "/usr/users/QIB_fr005/deolivl/Academic/Quadram/021.ncov/03.perobaDB"
-        if prefix is None: prefix = "peroba."
-        self.reset_timestamp()
+        if prefix is None: self.f_prefix = "peroba."
+        else:              self.f_prefix = prefix
+        self.reset_timestamp(timestamp) ## uses f_prefix
         if (treefile): self.add_treefile (treefile, use_db_path=input_path)
         if (raw_metadata_filelist): self.add_metadata_from_raw_csv_files (raw_metadata_filelist, use_db_path=input_path)
         if (sequence_filelist): self.add_sequences (sequence_filelist, use_db_path=input_path)
@@ -40,10 +44,12 @@ class DataSeqTree:   ## python3 doesn't use base class object anymore ;)
         if (timestamp):  self.timestamp = timestamp
         else:            self.timestamp = self.prefix + datetime.datetime.now().strftime("%m%d%H%M%S") 
 
-    def copy_from_DST (self, original = None): # untested
+    def copy_from_DST (self, original = None, prefix = None): # untested
         if original is None: return
+        if prefix is None and self.file_prefix is None: 
+            self.prefix = original.prefix + datetime.datetime.now().strftime("%H%M%S") + "." 
         self.db_path   = original.db_path
-        self.timestamp = original.timestamp
+        self.timestamp = original.timestamp[:-10] ## time part only
         self.metadata  = original.metadata.copy(deep=True)
         self.tree = ete3.Tree (original.tree)
         self.tree_leaves = copy.deepcopy (original.tree_leaves)
@@ -55,13 +61,14 @@ class DataSeqTree:   ## python3 doesn't use base class object anymore ;)
         if subfolder is None: directory = directory
         else:                 directory = f"{directory}/{subfolder}/"
         if prefix is None: # must find the most recent files; assumes default naming
-            names = [int(x.replace(".metadata.csv.gz","")[:-10]) for x in glob.glob(f"{directory}*.metadata.csv.gz")]
-            prefix = "peroba." + str(sorted(names)[-1])
+            names = [int(x.replace(self.f_suffix["database"],"")[:-10]) 
+                    for x in glob.glob(f"{directory}*" + self.f_suffix["database"])]
+            prefix = self.f_prefix + str(sorted(names)[-1]) # highest timestamp => most recent?
 
         path = directory + prefix # directory + file prefix
-        self.add_treefile (treefile=f"{path}.tree.nhx")
-        self.add_metadata_from_clean_dataframe (metadata = f"{path}.metadata.csv.gz", use_db_path = False)
-        self.add_sequences (sequence_filelist = f"{path}.unaligned.fasta.bz2", use_db_path = False)
+        self.add_treefile (treefile=path + self.f_suffix["tree"])
+        self.add_metadata_from_clean_dataframe (metadata = path + self.f_suffix["metadata"], use_db_path = False)
+        self.add_sequences (sequence_filelist = path + self.f_suffix["sequences"], use_db_path = False)
 
     def save_to_database (self, prefix=None, directory=None, subfolder=None):
         """ save your initial big table etc, since we may modify them
@@ -74,24 +81,20 @@ class DataSeqTree:   ## python3 doesn't use base class object anymore ;)
         else:                 directory = f"{directory}/{subfolder}/"
         pathlib.Path(directory).mkdir(parents=True, exist_ok=True) # python 3.5+
         path = directory + prefix # directory + file prefix
-        self.metadata.to_csv (f"{path}.metadata.csv.gz")
-        self.tree.write(format=1, outfile=f"{path}.tree.nhx")
-        with bz2.open(f"{path}.unaligned.fasta.bz2","wb") as fw: 
+        self.metadata.to_csv (path + self.f_suffix["metadata"])
+        self.tree.write(format=1, outfile=path + self.f_suffix["tree"])
+        with bz2.open(path + self.f_suffix["sequences"],"wb") as fw: 
             for name, rec in self.sequences.items():
                 seq = str(rec.seq)
                 fw.write(str(f">{name}\n{seq}\n").encode())
 
     # TODO: decide if reestimate tree;
     def add_treefile (self, treefile=None, use_db_path=False, merge_now = False): 
-        if treefile is None or self.tree is not None: ## LOG: tree already exists; refuse to replace it (I cant merge them)
-            return
+        if treefile is None or self.tree is not None: return
         if isinstance (treefile, str):
-            if use_db_path is True:
-                treefile = f"{self.db_path}/{treefile}"
-            elif use_db_path:
-                treefile = f"{use_db_path}/{treefile}"
-            else:
-                treefile = treefile
+            if use_db_path is True: treefile = f"{self.db_path}/{treefile}"
+            elif use_db_path:       treefile = f"{use_db_path}/{treefile}"
+            else:                   treefile = treefile
         treestring = open(treefile).readline().rstrip().replace("\'","").replace("\"","").replace("[&R]","")
         self.tree = ete3.Tree(treestring)
         # check duplicated names (ete3 accepts without checking, but complains later)
@@ -326,6 +329,39 @@ class DataSeqTree:   ## python3 doesn't use base class object anymore ;)
 
         self.metadata = df_merge_metadata_by_index (norwmeta, self.metadata) 
 
+    def align_sequences (self, reference_genome=None, trim=None, n_threads = 8):
+        if reference_genome is None: reference_genome = f"{self.db_path}/data/MN908947.3.fas"
+        align_list = minimap2_align_seqs([x for x in self.sequences.values()], n_threads = n_threads, reference_path = reference_genome)
+        if trim is True: trim = [265, 29675]
+        if isinstance (trim, list): 
+            for x in align_list:
+                x.seq = x.seq[trim[0]:trim[1]]
+        self.sequences = {x.id:x for x in align_list}
+
+    def rough_tree (self, n_threads = 8):
+        tmpfile = "/tmp/roughttree.aln"
+        aln = snpsites_from_alignment ([x for x in self.sequences.values()], n_threads = n_threads, outfile=tmpfile)
+        tree = rapidnj_from_alignment (infile = tmpfile, n_threads = n_threads)
+        os.system("rm -f " + tmpfile)
+        self.tree = tree
+        self.tree_needs_update = False
+
+    def subsample (self): ## FIXME: just copy-paste so far
+        # in order of resolution (34 lineages, 54 special, 479 uk, 1600 phylotypes):
+        clade_cols = ["lineage", "special_lineage", "uk_lineage", "phylotype"]
+        df = df.sort_values(by=['lineage_support', 'days_since_Dec19'], ascending=[False, True])
+        df1 = df.groupby(["lineage", "uk_lineage"]).head(1) # for each group combination, pick first (highest support as we defined above)
+        df1 = df.groupby(clade_cols[0]).head(4) 
+        df2 = df.groupby(clade_cols[1]).head(3) 
+        df3 = df.groupby(clade_cols[2]).filter(lambda x: len(x) > 3).head(1) # only large uk_lineages
+        df4 = df[(~df["submission_org_code"].str.contains("NORW")) & (df["adm2"].str.contains("NORFOLK"))]
+        df5 = df[df["uk_lineage"] == "x"].head(2); ## more sampling for those not in known lineages 
+        #df4 = df[df["submission_org_code"].str.contains("NORW")] ## all
+        #df5 = df[df["adm2"].str.contains("NORFOLK")] ## all from NORFOLK and SUFFOLK
+        df0 = pd.concat([df1, df2, df3, df4, df5])
+        df0 = df0.groupby(df0.index).aggregate("first"); # index is "seq_id"
+        #df0['pango_id'] = df0.apply(lambda a: create_pango_id_from_df(a), axis=1) ## recreate using new index
+    
 class SNPalign:
     """ This holds an aligment of SNP-only sites, to speed up calculations
         These can become characters for ancestral reconstruction.
