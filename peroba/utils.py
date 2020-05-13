@@ -12,7 +12,7 @@ import ete3 # also used by pastml but may not be accessible
 import numpy as np, pandas as pd, seaborn as sns
 from sklearn import manifold, metrics, cluster, neighbors, decomposition, preprocessing
 import skbio, parasail, dendropy, datetime, time, codecs, joypy
-import sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools
+import sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib
 
 def print_redblack(textr="", textb=""):
     print ('\x1b[0;1;31;1m'+ str(textr) + '\x1b[0;1;30;1m'+ str(textb) + '\x1b[0m')
@@ -70,17 +70,17 @@ def get_days_since_2019 (x, impute = False):
             x = x[:7] + "-01"
     return (datetime.datetime.strptime(str(x),"%Y-%m-%d") - datetime.datetime(2019, 12, 1)).days
 
-def align_seqs (sequences=None, maxiters=12, infile=None, outfile=None):
+def align_seqs (sequences=None, infile=None, outfile=None):
     print ("started aligning...", flush=True, end=" ")
     if (sequences is None) and (infile is None):
         print ("ERROR: You must give me an alignment object or file")
         return [] ## OTOH if both are present then infile is overwritten with contents of sequences[]
     if infile is None:
-        ifl = "/tmp/in.fas"
+        ifl = "/tmp/unaligned.fas"
     else:
         ifl = infile
     if outfile is None:
-        ofl = "/tmp/out.fas"
+        ofl = "/tmp/mafft.aln"
     else:
         ofl = outfile
     SeqIO.write(sequences, ifl, "fasta")
@@ -110,6 +110,7 @@ def minimap2_align_seqs (sequences=None, infile = None, reference_path = None, p
     if sequences:      SeqIO.write(sequences, ifl, "fasta") ## else it should be present in infile
     samfile = f"{prefix}/minimap2.sam"
 
+    reference_path = os.path.expanduser(reference_path) ## FIXME: I should always do this to avoid tilde curse
     index_path = '%s.mmi' % reference_path
     if not os.path.isfile(index_path):
         runstr = f"minimap2 -t {n_threads} -d {index_path} {reference_path}"
@@ -137,7 +138,7 @@ def minimap2_align_seqs (sequences=None, infile = None, reference_path = None, p
         ref_ind = int(parts[3])-1
         cigar = parts[5].strip()
         seq = parts[9].strip()
-        edits = parse_cigar(cigar)
+        edits = lowlevel_parse_cigar (cigar)
         this_sequence_name = ID
         if ref_ind > 0:  this_sequence = '-' * ref_ind # write gaps before alignment
         else:            this_sequence = ""  ## no gaps
@@ -160,6 +161,28 @@ def minimap2_align_seqs (sequences=None, infile = None, reference_path = None, p
     os.system(f"rm -f {samfile}")
     return align
 
+def snpsites_from_alignment (sequences = None, infile = None, outfile = None, prefix = "/tmp/"):
+    if (sequences is None) and (infile is None):
+        print ("ERROR: You must give me an alignment object or file")
+    if prefix is None: prefix = "./"
+    if infile is None: ifl = prefix + "/wholegenome.aln"
+    else:              ifl = infile
+    if outfile is None: ofl = prefix + "/snpsites.aln"
+    else:               ofl = outfile
+    if sequences:       SeqIO.write(sequences, ifl, "fasta") # otherwise we assume sequence file exists 
+
+    runstr = f"snp-sites {ifl} > {ofl}" # TODO: allow snp-sites -v for VCF
+    proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)    
+    snps = AlignIO.read(ofl, "fasta")
+
+    if infile is None:  os.system("rm -f " + ifl)
+    #else:               os.system("bzip2 -f " + ifl) ## all fasta files shall be bzipped
+    if outfile is None: os.system("rm -f " + ofl)
+
+    return snps
+
+iupac_dna = {''.join(sorted(v)):k for k,v in Seq.IUPAC.IUPACData.ambiguous_dna_values.items()}
+
 ## TODO: using reference MN908947.3, trim to [265, 29675]
 def rapidnj_from_alignment (sequences = None, infile = None, outfile = None, prefix = "/tmp/", n_threads = 4):
     if (sequences is None) and (infile is None):
@@ -174,12 +197,9 @@ def rapidnj_from_alignment (sequences = None, infile = None, outfile = None, pre
     runstr = "rapidnj " + ifl + " -i fa -t d -n -c " + str(n_threads) + " -x " + ofl 
     proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)    
     tree = ete3.Tree (ofl)
-    if infile is None:
-        os.system("rm -f " + ifl)
-    else: 
-        os.system("bzip2 -f " + ifl) ## all fasta files shall be bzipped
-    if outfile is None:
-        os.system("rm -f " + ofl)
+    if infile is None:  os.system("rm -f " + ifl)
+    #else:               os.system("bzip2 -f " + ifl) ## all fasta files shall be bzipped 
+    if outfile is None: os.system("rm -f " + ofl)
     return tree
 
 iupac_dna = {''.join(sorted(v)):k for k,v in Seq.IUPAC.IUPACData.ambiguous_dna_values.items()}
