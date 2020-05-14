@@ -17,7 +17,7 @@ import sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, ran
 def print_redblack(textr="", textb=""):
     print ('\x1b[0;1;31;1m'+ str(textr) + '\x1b[0;1;30;1m'+ str(textb) + '\x1b[0m')
 
-def read_fasta (filename, zip = "bz2", check_name = False, debug = False):
+def read_fasta (filename, zip = "bz2", fragment_size = 0, check_name = False, debug = False):
     unaligned = []
     if (zip == "bz2"):
         this_open = bz2.open
@@ -38,7 +38,8 @@ def read_fasta (filename, zip = "bz2", check_name = False, debug = False):
             if (check_name and "|" in record.description): # consensus from COGUK and GISAID names: `hCoV-19/Australia/NT12/2020|EPI_ISL_426900|2020-03-25`
                 seqname = record.description.split("|")[0]
                 record.id = seqname.replace("hCoV-19/","")
-            unaligned.append(record)
+            if len(record.seq) > fragment_size:
+                unaligned.append(record)
     if (debug):
         print_redblack ("first record length: " + str(len(unaligned[0].seq)))
         print (unaligned[0])
@@ -161,17 +162,19 @@ def minimap2_align_seqs (sequences=None, infile = None, reference_path = None, p
     os.system(f"rm -f {samfile}")
     return align
 
-def snpsites_from_alignment (sequences = None, infile = None, outfile = None, prefix = "/tmp/"):
+def snpsites_from_alignment (sequences = None, strict = False, infile = None, outfile = None, prefix = "/tmp/"):
     if (sequences is None) and (infile is None):
         print ("ERROR: You must give me an alignment object or file")
     if prefix is None: prefix = "./"
+    if strict is False: strict = ""
+    else:               strict = "-c"
     if infile is None: ifl = prefix + "/wholegenome.aln"
     else:              ifl = infile
     if outfile is None: ofl = prefix + "/snpsites.aln"
     else:               ofl = outfile
     if sequences:       SeqIO.write(sequences, ifl, "fasta") # otherwise we assume sequence file exists 
 
-    runstr = f"snp-sites {ifl} > {ofl}" # TODO: allow snp-sites -v for VCF
+    runstr = f"snp-sites {strict} {ifl} > {ofl}" # TODO: allow snp-sites -v for VCF
     proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)    
     snps = AlignIO.read(ofl, "fasta")
 
@@ -199,6 +202,53 @@ def rapidnj_from_alignment (sequences = None, infile = None, outfile = None, pre
     #else:               os.system("bzip2 -f " + ifl) ## all fasta files shall be bzipped 
     if outfile is None: os.system("rm -f " + ofl)
     return tree
+
+def pda_from_tree (tree, infile = None, outfile = None, prefix = "/tmp/", n_remain = 500):
+    if (tree is None) and (infile is None):
+        print ("ERROR: You must give me a tree object or file")
+    if prefix is None: prefix = "./"
+    if infile is None: ifl = prefix + "bigtree.tre"
+    else:              ifl = infile
+    if outfile is None: ofl = prefix + "pda.tre"
+    else:               ofl = outfile
+    tree.write(format=1, outfile=ifl)
+    n_remain = str(n_remain)
+    runstr = f"iqtree -te {ifl} -k {n_remain}; tail -n 6 {ifl}.pda | head -1 > {ofl}"
+    proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)    
+    treestring = open(ofl).readline().rstrip().replace("\'","").replace("\"","").replace("[&R]","")
+    tree_out = ete3.Tree (treestring)
+    if infile is None:  os.system("rm -f " + ifl)
+    if outfile is None: os.system("rm -f " + ofl)
+    return tree_out
+
+def improve_tree_from_align (tree, align, if_tre = None, of_tre = None, a_file = None, prefix = "/tmp/", n_threads = 4, params=None):
+    if (tree is None) and (if_tre is None):
+        print ("ERROR: You must give me a tree object or file")
+    if (align is None) and (a_file is None):
+        print ("ERROR: You must give me an alignment or file")
+    if params is None: params = "-m HKY+G -me 0.05 -blmin 0.000005 -blmax 4"
+    if prefix is None: prefix = "./"
+    if if_tre is None: ifl = prefix + "in_iqtre.tre"
+    else:              ifl = if_tre
+    if of_tre is None: ofl = prefix + "out_iqtre.tre"
+    else:              ofl = of_tre
+    if a_file is None: aln = prefix + "seq.aln"
+    else:              aln = a_file
+
+    if align: SeqIO.write(align, aln, "fasta") ## else it should be present in infile
+    if tree:  tree.write(format=1, outfile=ifl) ## to recycle the file make sure tree and align are None
+
+    n_threads = str (n_threads)
+    runstr = f"iqtree -g {ifl} -s {aln} {params} -ninit 1 -nt {n_threads} -redo; mv {aln}.treefile {ofl}"
+    proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)    
+
+    treestring = open(ofl).readline().rstrip().replace("\'","").replace("\"","").replace("[&R]","")
+    tree_out = ete3.Tree (treestring)
+
+#    os.system(f"rm -f {aln}.* ifl")
+#    if a_file is None: os.system(f"rm -f {aln}")
+#    if of_tre is None: os.system(f"rm -f {ofl}")
+    return tree_out
 
 iupac_dna = {''.join(sorted(v)):k for k,v in Seq.IUPAC.IUPACData.ambiguous_dna_values.items()}
 
@@ -307,8 +357,11 @@ def df_read_genome_metadata (filename, primary_key = "sequence_name", rename_dic
     return df1
 
 def df_merge_metadata_by_index (df1, df2): # merge by replacing NA whenever possible, using INDEX
+    #print ("zero", df1.columns, df1.index.names, df2.columns, df2.index.names); display(df1)
     df1 = df1.combine_first(df2)
+    #print ("one", df1.columns, df2.columns); display(df1)
     df1 = df2.combine_first(df1)
+    #print ("two", df1.columns, df2.columns); display(df1)
     # if before combine_first() there were dups they're kept by pandas
     df1 = df1.groupby(df1.index).aggregate("first"); 
     df1.sort_index(inplace=True)
@@ -383,7 +436,7 @@ def get_ancestral_trait_subtrees (tre, csv,  tiplabel_in_csv = "sequence_name", 
     mono = tre.get_monophyletic (values=trait_value, target_attr = trait_column) # from ete3 
     return subtrees, mono, result
 
-def get_binary_trait_subtrees (tre, csv,  tiplabel_in_csv = "sequence_name", elements = 1, 
+def get_binary_trait_subtrees (tre, csv,  tiplabel_in_csv = None, elements = 1, 
           trait_column ="adm2", trait_value = "NORFOLK", n_threads = 4, method = "DOWNPASS"):
     '''
     Instead of reconstructing all states, we ask if ancestral state is value or not. Still we allow for `elements` > 1
@@ -420,7 +473,7 @@ def get_binary_trait_subtrees (tre, csv,  tiplabel_in_csv = "sequence_name", ele
           stored_leaves.update (node2leaves[xnode]) # update() is append() for sets ;)
           subtrees.append(xnode)
     mono = tre.get_monophyletic (values = "yes", target_attr = new_trait) # from ete3 
-    return subtrees, mono, result
+    return subtrees, mono, result, new_trait
 
 def colormap_from_dataframe (df, column_list, column_names, cmap_list = None):
     ''' returns a dictionary of lists, where key is the tip label (should be index of csv)
