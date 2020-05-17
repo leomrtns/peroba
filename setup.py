@@ -61,7 +61,7 @@ setuptools.setup(
     #   https://setuptools.readthedocs.io/en/latest/setuptools.html#automatic-script-creation
     entry_points = {
         "console_scripts": [
-            "peroba = peroba.__main__:main",
+            "peroba_database = peroba.peroba_database:main",
         ]
     }
     
