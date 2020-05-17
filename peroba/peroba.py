@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+## TODO: "UNKNOWN SOURCE" and "UNKNOWN" are the same adm2 (in cog)
+
 #import utils 
 from utils import *
 
@@ -308,6 +310,9 @@ class DataSeqTree:
         ## 452 rows but only 302 sequences, since 150 were not sequenced yet or QC rejected)
         norwmeta = df_read_genome_metadata (metadata_file, index_name = "central_sample_id")
         matched = self.metadata[ self.metadata["central_sample_id"].isin(norwmeta.index) ]
+
+        norwmeta["submission_org_code"] = "NORW"
+        norwmeta["submission_org"] = "Norwich"
         
         ## number of sequences is smaller than metadata; named by central_sample_id
         seq_matrix = read_fasta (filepath, zip = zipmode, check_name = False) 
@@ -346,6 +351,7 @@ class DataSeqTree:
         else: ## some will have values from previous iterations, here we respect their priority
             norwmeta[priority_label].fillna(int(initial_priority), inplace=True)
 
+        norwmeta = df_finalise_metadata (norwmeta) ## add days_since_dec19 
         self.metadata = df_merge_metadata_by_index (norwmeta, self.metadata) 
 
     def align_sequences (self, reference_genome=None, trim=None, n_threads = 8):
@@ -451,31 +457,37 @@ class DataSeqTree:
         #df5 = df[df["uk_lineage"] == "x"].head(2); ## more sampling for those not in known lineages 
         self.metadata = dfcat.groupby(dfcat.index).aggregate("first") 
     
-    def ASR_subtrees (self, asr_cols = None, method = None):
+    def ASR_subtrees (self, reroot = True, asr_cols = None, method = None):
         """ ancestral state reconstruction assuming binary or not
         One column at a time, so the n_threads doesn't help.
         """
         if method is None: method = ["DOWNPASS", "DOWNPASS"]
         if isinstance (method, str): method = [method, method]
+        if asr_cols is None: asr_cols = asr_cols = ["adm2", "Postcode", "submission_org_code","date_sequenced"]
+
+        if reroot:
+            R = self.tree.get_midpoint_outgroup()
+            self.tree.set_outgroup(R)
+
         ## subtrees will be defined by 'locality'
         yesno = (self.metadata["adm2"].str.contains("Norfolk", case=False)) | (self.metadata["submission_org_code"].str.contains("NORW", case=False))
-        df = pd.DataFrame(yesno.astype(str), columns=["local"], index=csv.index.copy())
-        x = get_ancestral_trait_subtrees (self.tree, df, trait_column = "local", trait_value = "True", elements = 1, method=method[0])
+        df = pd.DataFrame(yesno.astype(str), columns=["local"], index=self.metadata.index.copy())
+        x = get_binary_trait_subtrees (self.tree, df, trait_column = "local", trait_value = "True", elements = 1, method=method[0])
         subtree, mono, result, trait_name = x  # most important is subtree
         
         ## decorate the tree with ancestral states
-        asr_cols = ["adm2", "Postcode", "submission_org_code","date_sequenced"]
-        df = dst.metadata[asr_cols];
+        df = self.metadata[asr_cols];
         df.loc[~df["submission_org_code"].str.contains("NORW", na=False), "date_sequenced"] = "nil" # only for NORW
         for col in asr_cols:
             df[col].fillna("nil", inplace=True)
         result = acr (self.tree, df, prediction_method = method[1], force_joint=False) ## annotates tree nodes with states (e.g. tre2.adm2)
 
-        node2leaves = self.tree.get_cached_content() # dict node:[leaves]
-        submetadata = [self.metadata.loc[self.metadata.index.isin[node2leaves[x]]] for x in subtree]
-        supermetadata = [self.metadata.loc[self.metadata.index.isin[node2leaves[x]]] for x in subtree.up]
+        node2leaves = self.tree.get_cached_content(store_attr="name") # dict node:[leaves]
+        submetadata = [self.metadata.loc[self.metadata.index.isin(node2leaves[x])] for x in subtree]
+        supermetadata = [self.metadata.loc[self.metadata.index.isin(node2leaves[x.up])] for x in subtree if x.up]
 
         return subtree, submetadata, supermetadata
+#        return subtree, node2leaves
 
 class SNPalign:
     """ This holds an aligment of SNP-only sites, to speed up calculations

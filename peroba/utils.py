@@ -379,11 +379,13 @@ def df_finalise_metadata (df, exclude_na_rows = None, exclude_columns = "default
     df = df.sort_values(by=['lineage_support', 'days_since_Dec19'], ascending=[False, True])
     df["collection_datetime"] = pd.to_datetime(df["collection_date"], infer_datetime_format=False, errors='coerce')
 
+
     # default values for missing rows (in case we don't want to remove those rows)
     if not exclude_na_rows or "uk_lineage" not in exclude_na_rows:
         df["uk_lineage"] = df["uk_lineage"].replace(np.nan, "x", regex=True) 
     if not exclude_na_rows or "adm2" not in exclude_na_rows:
         df['adm2'].fillna(df.country, inplace=True)
+        df['adm2'] = df['adm2'].str.title()
 
     if exclude_na_rows: # list of important columns, such that rows missing it should be removed
         important_cols = [x for x in exclude_na_rows if x in list(df.columns)]
@@ -398,7 +400,7 @@ def df_finalise_metadata (df, exclude_na_rows = None, exclude_columns = "default
         df = df.T.drop_duplicates().T # transpose, remove duplicate rows, and transpose again
     return df
 
-def get_ancestral_trait_subtrees (tre, csv,  tiplabel_in_csv = "sequence_name", elements = 1, 
+def get_ancestral_trait_subtrees (tre, csv,  tiplabel_in_csv = None, elements = 1, 
         trait_column ="adm2", trait_value = "NORFOLK", n_threads = 4, method = "DOWNPASS"):
     '''
     Returns ancestral nodes predicted to have a given trait_value (e.g. "NORFOLK") for a given trait column (e.g. "adm2").
@@ -481,7 +483,7 @@ def colormap_from_dataframe (df, column_list, column_names, cmap_list = None):
         the default colormap are qualitative so I guess they fail if #elements>#colours...
     '''
     if cmap_list is None:
-        cmap_list = ["Accent", "Dark2", "jet", "hsv", "viridis", "plasma", "cividis", "rainbow", "nipy_spectral"]
+        cmap_list = ["Accent", "Dark2", "cividis", "jet", "hsv", "viridis", "plasma", "rainbow", "nipy_spectral"]
     if isinstance (cmap_list, str): # assume it's a list, below
         cmap_list = [cmap_list]
     if len(column_list) != len(column_names):
@@ -536,7 +538,7 @@ def return_treestyle_with_columns (cmapvector):
     ns2["hz_line_type"]  = ns1["vt_line_type"]  = 0 # 0=solid, 1=dashed, 2=dotted
     ns2["hz_line_color"] = ns1["vt_line_color"] = "#0c0c0c"
 
-    ## prepare table and other node information
+    ## prepare table and other node information (don't adjust your TV or the identation, this is a local function)
     def tree_profile_layout (node):
         if node.is_leaf(): # the aligned leaf is "column 0", thus traits go to column+1
             node.set_style(ns1) ## may be postponed to when we have ancestral states
