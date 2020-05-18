@@ -14,14 +14,13 @@ from utils import *
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False
 stream_log = logging.StreamHandler()
-log_format = logging.Formatter(fmt='perobaDB:%(levelname)s:%(asctime)s:%(message)s', datefmt="%Y-%m-%d %H:%M")
+log_format = logging.Formatter(fmt='perobaDB %(asctime)s [%(levelname)s] %(message)s', datefmt="%Y-%m-%d %H:%M")
 stream_log.setFormatter(log_format)
 stream_log.setLevel(logging.INFO)
 logger.addHandler(stream_log)
 
 cwd = os.getcwd()
 #outdir = os.path.join(cwd, args.outdir)
-
 
 class PerobaDatabase:   
     """ Basic structure with all available data: sequence, tree, and epi-metadata, with file location information

@@ -341,9 +341,7 @@ class DataSeqTree:
         norwmeta.set_index (self.metadata.index.names, drop = True, inplace = True) # drop to avoid an extra 'peroba_seq_uid' column
         
         for x in seq_matrix:
-            if sum(norwmeta["central_sample_id"].str.contains(x.id)) > 0:
-                x.id = norwmeta[norwmeta["central_sample_id"].str.contains(x.id)].index.values[0]
-            else: print ("DEBUG:: This sequence is not on metadata", x.id)
+            x.id = norwmeta[norwmeta["central_sample_id"] == x.id].index.values[0]
 
         self.sequences.update({x.id:x for x in seq_matrix}) # new local sequences
         self.sequences.update({x:None for x in empty_seqnames}) # still missing; avoid being purged by merge_DST()

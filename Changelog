@@ -1,0 +1,8 @@
+
+TODO_LIST
+ - always use path.os.join()
+ - add --version
+
+
+2020.05.18 Leo
+ * peroba_database: finished refactoring to create standalone DB generation
