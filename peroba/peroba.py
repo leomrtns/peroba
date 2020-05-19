@@ -235,8 +235,7 @@ class DataSeqTree:
         samples_found_in_sequences = self.metadata.index.isin([x for x in self.sequences.keys()])
         self.metadata = self.metadata[samples_found_in_sequences]
         print_redblack ("LOG:: new table size is (after excluding missing sequences):", sum(samples_found_in_sequences))
-
-        self.add_sequence_counts_to_metadata (from_scratch = False) ## add column if missing
+        #self.add_sequence_counts_to_metadata (from_scratch = False) ## add column if missing
 
     def merge_sequence_tree (self, use_tree_to_remove_samples = False): # keep only intersection
         if self.tree is None or self.sequences is None:

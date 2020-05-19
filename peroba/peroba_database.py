@@ -166,12 +166,12 @@ class PerobaDatabase:
         else:
             dbpath = ""
         df1 = None
-        logger.debug(f"Will read metadata files from directory {dbpath} (if not set idividually, see below)")
+        logger.info(f"Will read metadata files from directory {dbpath} (if not set idividually, see below)")
         for f in metadata_filelist:
             filepath = dbpath + f
             if "tsv" in f: sep = "\t"
             else:          sep = ","
-            logger.debug(f"Reading metadata file {f}")
+            logger.info(f"Reading metadata file {f}")
             df2 = df_read_genome_metadata (filepath, sep = sep, index_name = "peroba_seq_uid")
             if df1 is None: df1 = df2
             else: df1 = df_merge_metadata_by_index (df1, df2) 
@@ -190,14 +190,14 @@ class PerobaDatabase:
         else:
             dbpath = ""
         
-        logger.debug(f"Reading fasta sequence files from {dbpath} (if not set individually below)") 
+        logger.info(f"Reading fasta sequence files from {dbpath} (if not set individually below)") 
         if self.sequences is None:  self.sequences = dict(); 
         for f in sequence_filelist:
             filepath = dbpath + f
             if   "bz2" in f: zipmode = "bz2"
             elif "gz"  in f: zipmode = "gz"
             else:            zipmode = None
-            logger.debug(f"Reading sequence file {f}")
+            logger.info(f"Reading sequence file {f}")
             seqs = read_fasta (filepath, zip = zipmode, check_name = True) # list
             self.sequences.update({x.id:x for x in seqs})  # dictionary of SeqRecord() (so duplicates are simply overwritten)
 
@@ -342,7 +342,6 @@ def main():
     prb_db = PerobaDatabase (treefile=args.tree, raw_metadata_filelist=args.metadata, 
             sequence_filelist = args.fasta, input_path = None, peroba_db_path = output) 
     prb_db.save_to_db_files () 
-
 
 if __name__ == '__main__':
     main()

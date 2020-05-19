@@ -325,6 +325,7 @@ def df_read_genome_metadata (filename, primary_key = "sequence_name", rename_dic
         exclude_columns = ["is_travel_history","is_surveillance","is_hcw", "is_community", "outer_postcode", "travel_history"]
 
     df1 = pd.read_csv (str(filename), compression=compression, sep=sep) # sep='\t' for gisaid
+    print ("BEFORE: ", df1.shape)
 
     # fix column names  
     if rename_dict:
@@ -347,13 +348,18 @@ def df_read_genome_metadata (filename, primary_key = "sequence_name", rename_dic
             df1.drop (labels = irrelevant_cols, axis=1, inplace = True) # no sample with this information
 
     if index_name not in list(df1.columns): # regular CSV file from external source
+        print ("AFT2_A: ", df1.shape, index_name, primary_key)
         df1.set_index (str(primary_key), drop = False, inplace = True) # dont drop the column to be used as index
-        df1.dropna (subset=[str(primary_key)], inplace = True); # now we have a column and an index with same name
+        # now we have a column and an index with same name
+        #df1.dropna (subset=[str(primary_key)], inplace = True); 
         df1.rename_axis(str(index_name), inplace = True) # equiv. to df.index.name="peroba_seq_uid"
     else:
+        print ("AFT2_B: ", df1.shape, index_name, primary_key)
         df1.set_index (str(index_name), drop = True, inplace = True) # drop the column to avoid having both with same name
 
+    print ("AFT3: ", df1.shape)
     df1 = df1.groupby(df1.index).aggregate("first"); # duplicated indices are allowed in pandas
+    print ("AFT4: ", df1.shape)
     return df1
 
 def df_merge_metadata_by_index (df1, df2): # merge by replacing NA whenever possible, using INDEX
@@ -377,8 +383,7 @@ def df_finalise_metadata (df, exclude_na_rows = None, exclude_columns = "default
 
     df['days_since_Dec19'] = df['collection_date'].map(lambda a: get_days_since_2019(a, impute = True))
     df = df.sort_values(by=['lineage_support', 'days_since_Dec19'], ascending=[False, True])
-    df["collection_datetime"] = pd.to_datetime(df["collection_date"], infer_datetime_format=False, errors='coerce')
-
+    df["collection_date"] = pd.to_datetime(df["collection_date"], infer_datetime_format=False, errors='coerce')
 
     # default values for missing rows (in case we don't want to remove those rows)
     if not exclude_na_rows or "uk_lineage" not in exclude_na_rows:
