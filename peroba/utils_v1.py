@@ -1,10 +1,12 @@
 #!/usr/bin/env python
+from matplotlib import cm, colors # colormap
 from Bio import Seq, SeqIO, Align, AlignIO, Phylo, Alphabet, pairwise2
 from Bio.SeqRecord import SeqRecord
 from Bio.Align import AlignInfo, Applications
 from Bio.Blast import NCBIXML
 from Bio.Phylo import draw, TreeConstruction  #TreeConstruction.DistanceCalculator, TreeConstruction.DistanceTreeConstructor
-import ete3 
+from pastml.acr import acr
+import ete3 # also used by pastml but may not be accessible
 # https://bioinformatics.stackexchange.com/questions/4337/biopython-phylogenetic-tree-replace-branch-tip-labels-by-sequence-logos
 
 import numpy as np, pandas as pd, seaborn as sns
@@ -344,11 +346,9 @@ def df_read_genome_metadata (filename, primary_key = "sequence_name", rename_dic
         if irrelevant_cols:
             df1.drop (labels = irrelevant_cols, axis=1, inplace = True) # no sample with this information
 
-     # This must be relaxed if we want global statistics (no purging of incomplete rows)
     if index_name not in list(df1.columns): # regular CSV file from external source
         df1.set_index (str(primary_key), drop = False, inplace = True) # dont drop the column to be used as index
-        # now we have a column and an index with same name
-        df1.dropna (subset=[str(primary_key)], inplace = True); 
+        df1.dropna (subset=[str(primary_key)], inplace = True); # now we have a column and an index with same name
         df1.rename_axis(str(index_name), inplace = True) # equiv. to df.index.name="peroba_seq_uid"
     else:
         df1.set_index (str(index_name), drop = True, inplace = True) # drop the column to avoid having both with same name
@@ -379,6 +379,7 @@ def df_finalise_metadata (df, exclude_na_rows = None, exclude_columns = "default
     df = df.sort_values(by=['lineage_support', 'days_since_Dec19'], ascending=[False, True])
     df["collection_datetime"] = pd.to_datetime(df["collection_date"], infer_datetime_format=False, errors='coerce')
 
+
     # default values for missing rows (in case we don't want to remove those rows)
     if not exclude_na_rows or "uk_lineage" not in exclude_na_rows:
         df["uk_lineage"] = df["uk_lineage"].replace(np.nan, "x", regex=True) 
@@ -398,6 +399,182 @@ def df_finalise_metadata (df, exclude_na_rows = None, exclude_columns = "default
     if remove_duplicate_columns: # who knows which column it will choose (i.e. column names)
         df = df.T.drop_duplicates().T # transpose, remove duplicate rows, and transpose again
     return df
+
+def get_ancestral_trait_subtrees (tre, csv,  tiplabel_in_csv = None, elements = 1, 
+        trait_column ="adm2", trait_value = "NORFOLK", n_threads = 4, method = "DOWNPASS"):
+    '''
+    Returns ancestral nodes predicted to have a given trait_value (e.g. "NORFOLK") for a given trait column (e.g. "adm2").
+    Also returns nodes scrictly monophyletic regarding value.
+    If using parsimony then it's better to store only nodes with a single state (or create a binary state?) otherwise
+    we may end up chosing too close to root node...    MAP works well to find almost monophyletic nodes, but is quite slow
+    max likelihood methods: pastml.ml.MPPA, pastml.ml.MAP, pastml.ml.JOINT,
+    max parsimony methods: pastml.parsimony.ACCTRAN, pastml.parsimony.DELTRAN, pastml.parsimony.DOWNPASS
+    '''
+    if elements < 1: elements = 1 ## inferred state cardinality (how many values are allowed on matching internal node?)
+    if method not in ["MPPA", "MAP", "JOINT", "ACCTRAN", "DELTRAN", "DOWNPASS"]:
+        method = "DOWNPASS"
+    if tiplabel_in_csv: # o.w. we assume input csv already has it
+        csv_column = csv[[tiplabel_in_csv, trait_column]] # two columns now, tiplabel is removed below
+        csv_column.set_index("sequence_name", drop = True, inplace = True) # acr needs index mapping ete3 leaves
+    else:
+        csv_column = csv[[trait_column]]  ## nodes will have e.g. n.adm2 (access through getattr(n.adm2)
+    if isinstance (trait_value, list):
+        trait_value = trait_value[0] ## This function can handle only one value; for grouping try the get_binary version
+    ## Ancestral state reconstruction of given trait
+    result = acr (tre, csv_column, prediction_method = method, force_joint=False, threads=n_threads) ## annotates tree nodes with states (e.g. tre2.adm2)
+
+    ## Find all internal nodes where trait_value is possible state (b/c is seen at tips below)
+    matches = filter(lambda n: not n.is_leaf() and trait_value in getattr(n,trait_column) and
+            len(getattr(n,trait_column)) <= elements, tre.traverse("preorder"))
+    # print ([x.__dict__ for x in matches]) dictionary of attributes; ete3 also has n.features[] with dict keys
+
+    stored_leaves = set () # set of leaf names (created with get_cached_content)
+    subtrees = [] # list of non-overlapping nodes
+    node2leaves = tre.get_cached_content(store_attr="name") # set() of leaves below every node; store leaf name only
+    for xnode in matches:
+        if not bool (stored_leaves & node2leaves[xnode]): # both are sets; bool is just to be verbose
+            stored_leaves.update (node2leaves[xnode]) # update() is append() for sets ;)
+            subtrees.append(xnode)
+    mono = tre.get_monophyletic (values=trait_value, target_attr = trait_column) # from ete3 
+    return subtrees, mono, result
+
+def get_binary_trait_subtrees (tre, csv,  tiplabel_in_csv = None, elements = 1, 
+          trait_column ="adm2", trait_value = "NORFOLK", n_threads = 4, method = "DOWNPASS"):
+    '''
+    Instead of reconstructing all states, we ask if ancestral state is value or not. Still we allow for `elements` > 1
+    (2 in practice), so that we accept "yes and no" ancestral nodes. 
+    You can group trait values into a list 
+    '''
+    if elements < 1: elements = 1 ## inferred state cardinality (1 makes much more sense, but you can set "2" as well)
+    if method not in ["MPPA", "MAP", "JOINT", "ACCTRAN", "DELTRAN", "DOWNPASS"]:
+        method = "DOWNPASS"
+    if tiplabel_in_csv: # o.w. we assume input csv already has it
+        csv_column = csv[[tiplabel_in_csv, trait_column]] # two columns now, tiplabel is removed below
+        csv_column.set_index("sequence_name", drop = True, inplace = True) # acr needs index mapping ete3 leaves
+    else:
+        csv_column = csv[[trait_column]]  ## nodes will have e.g. n.adm2 (access through getattr(n.adm2)
+    if isinstance (trait_value, str): # assume it's a list, below
+        trait_value = [trait_value]
+
+    # transform variable into binary
+    new_trait = str(trait_column) + "_is_" + "_or_".join(trait_value)
+    csv_column[new_trait] = csv_column[trait_column].map(lambda a: "yes" if a in trait_value else "no")
+
+    csv_column.drop(labels = [trait_column], axis=1, inplace = True)
+    ## Ancestral state reconstruction of given trait
+    result = acr (tre, csv_column, prediction_method = method, force_joint=False, threads=n_threads) ## annotates tree nodes with states (e.g. tre2.adm2)
+    ## Find all internal nodes where trait_value is possible state (b/c is seen at tips below)
+    matches = filter(lambda n: not n.is_leaf() and "yes" in getattr(n,new_trait) and # traits are sets (not lists)
+            len(getattr(n,new_trait)) <= elements, tre.traverse("preorder"))
+
+    stored_leaves = set () # set of leaf names (created with get_cached_content)
+    subtrees = [] # list of non-overlapping nodes
+    node2leaves = tre.get_cached_content(store_attr="name") # set() of leaves below every node; store leaf name only
+    for xnode in matches:
+      if not bool (stored_leaves & node2leaves[xnode]): # both are sets; bool is just to be verbose
+          stored_leaves.update (node2leaves[xnode]) # update() is append() for sets ;)
+          subtrees.append(xnode)
+    mono = tre.get_monophyletic (values = "yes", target_attr = new_trait) # from ete3 
+    return subtrees, mono, result, new_trait
+
+def colormap_from_dataframe (df, column_list, column_names, cmap_list = None):
+    ''' returns a dictionary of lists, where key is the tip label (should be index of csv)
+    column_list and column_names must have same length, mapping to names on CSV and on plot
+        the default colormap are qualitative so I guess they fail if #elements>#colours...
+    '''
+    if cmap_list is None:
+        cmap_list = ["Accent", "Dark2", "cividis", "jet", "hsv", "viridis", "plasma", "rainbow", "nipy_spectral"]
+    if isinstance (cmap_list, str): # assume it's a list, below
+        cmap_list = [cmap_list]
+    if len(column_list) != len(column_names):
+        print ("ops, list of columns (from table) must have an equivalent name (that describes it)")
+        return
+    ## iterate over columns (phenotypes), to generate colormaps
+    d_col = {}
+    for i, (c, cname) in enumerate(zip(column_list, column_names)):
+        uniq = df[c].unique()
+        cmap_elem = cmap_list[i%len(cmap_list)] # cycle over given colormaps
+        if cmap_elem in ['Pastel1', 'Pastel2', 'Paired', 'Accent','Dark2', 'Set1', 
+                'Set2', 'Set3','tab10', 'tab20', 'tab20b', 'tab20c']: # only 8~20 colours
+            customCMap = colors.LinearSegmentedColormap.from_list("custom", [(x,cm.get_cmap(cmap_elem)(x)) for x in np.linspace(0, 1, 8)])
+        else:
+            customCMap = cm.get_cmap(cmap_elem)
+        colorlist = customCMap(np.linspace(0, 1, len(uniq)))
+        d_col[cname] = {name:colors.to_hex(col) for name,col in zip(uniq, colorlist)} ## each value is another dict from csv elements to colors
+    
+    col_missing = colors.to_hex([1,1,1,0]) ## transparent, default to white
+    ## iterate over rows (sequences)
+    d_seq = {}
+    d_seq_lab = {}
+    for seq in df.index: # frown upon by pandas wizards
+        d_seq[seq] = []
+        d_seq_lab[seq] = []
+        for c, cname in zip (column_list, column_names):
+            if df.loc[seq,c] in d_col[cname]: # valid value for column
+                d_seq[seq].append(d_col[cname][ df.loc[seq,c] ])
+                d_seq_lab[seq].append(str(df.loc[seq,c]))
+            else:
+                d_seq[seq].append(col_missing)
+                d_seq_lab[seq].append(str(" "))
+    return [d_seq, d_seq_lab, d_col, column_names] 
+
+def return_treestyle_with_columns (cmapvector):
+    '''
+    Need column names again to print header in order 
+    '''
+    [d_seq, d_seq_lab, d_col, column_names] = cmapvector
+    label_font_size = 6
+
+    # default node
+    ns1 = ete3.NodeStyle()
+    ns1["size"] = 1 ## small dot 
+    ns1["shape"] = "square" ## small dot 
+    ns1["fgcolor"] = "101010" ## small dot 
+    ns1["hz_line_type"]  = ns1["vt_line_type"]  = 0 # 0=solid, 1=dashed, 2=dotted
+    ns1["hz_line_color"] = ns1["vt_line_color"] = "#0c0c0c"
+    ns2 = ete3.NodeStyle()
+    ns2["size"] = 0 ## no dot
+    ns2["shape"] = "circle" ## small dot 
+    ns2["hz_line_type"]  = ns1["vt_line_type"]  = 0 # 0=solid, 1=dashed, 2=dotted
+    ns2["hz_line_color"] = ns1["vt_line_color"] = "#0c0c0c"
+
+    ## prepare table and other node information (don't adjust your TV or the identation, this is a local function)
+    def tree_profile_layout (node):
+        if node.is_leaf(): # the aligned leaf is "column 0", thus traits go to column+1
+            node.set_style(ns1) ## may be postponed to when we have ancestral states
+            ete3.add_face_to_node(ete3.AttrFace("name", fsize=label_font_size, text_suffix="   "), node, 0, position="aligned")
+            for column, (rgb_val, lab) in enumerate(zip(d_seq[node.name], d_seq_lab[node.name])): ## colour of csv.loc[node.name, "adm2"]
+                label = {"text": lab[:10], "color":"Black", "fontsize": label_font_size-1}
+                ete3.add_face_to_node (ete3.RectFace (50, 10, fgcolor=rgb_val, bgcolor=rgb_val, label = label), node, column+1, position="aligned")
+        else:
+            node.set_style(ns2) 
+            #node.img_style['hz_line_color'] = node.img_style['vt_line_color'] =
+
+    ts = ete3.TreeStyle()
+    ts.draw_guiding_lines = True # dotted line between tip and name
+    ts.guiding_lines_color = "#bdb76d"
+    ts.guiding_lines_type = 2 #  0=solid, 1=dashed, 2=dotted
+    ts.layout_fn = tree_profile_layout
+    ts.branch_vertical_margin = 0
+    ts.min_leaf_separation = 1 # Min separation, in pixels, between two adjacent branches
+    ts.scale = 2000000 # 2e6 pixels per branch length unit (i.e. brlen=1 should be how many pixels?)
+    ts.show_scale = False
+    show_branch_length = True
+    ts.show_leaf_name = False # we handle this in the layout function
+
+    ## STILL dont know how to do it
+    #ts.legend.add_face(CircleFace(10, "red"), column=0)
+    #ts.legend.add_face(TextFace("0.5 support"), column=1)
+    #ts.legend_position = 3 #  TopLeft corner if 1, TopRight if 2, BottomLeft if 3, BottomRight if 4
+    
+    for col, label in enumerate([""] + column_names): # the first are tip labels
+        labelFace = ete3.TextFace(label, fsize=10, fgcolor="DimGray") # fsize controls interval betweel columns
+        labelFace.rotation = 290
+        labelFace.vt_align = 1  # 0 top, 1 center, 2 bottom
+        labelFace.hz_align = 2  # 0 left, 1 center, 2 right 
+        ts.aligned_header.add_face(labelFace, col)
+
+    return ts
 
 ## rapidnj adds single quotes to names
 ## "China/Wuhan-Hu-1/2019" (NC_045512.2) identical to MN908947 acc to NCBI and is the longest, without Ns

@@ -1,4 +1,3 @@
-
 import logging, ete3, argparse
 import matplotlib
 matplotlib.use('Agg') # first rule to prevent system of chosing X11-based
@@ -6,11 +5,13 @@ import matplotlib.pyplot as plt
 from matplotlib import rcParams
 
 from utils import *
+import phylodrawing as phylo
+import statsdrawing as stdraw
 
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False
 stream_log = logging.StreamHandler()
-log_format = logging.Formatter(fmt='perobaDB %(asctime)s [%(levelname)s] %(message)s', datefmt="%Y-%m-%d %H:%M")
+log_format = logging.Formatter(fmt='peroba_report %(asctime)s [%(levelname)s] %(message)s', datefmt="%Y-%m-%d %H:%M")
 stream_log.setFormatter(log_format)
 stream_log.setLevel(logging.DEBUG)
 logger.addHandler(stream_log)
@@ -23,130 +24,39 @@ template_dir = os.path.join( os.path.dirname(os.path.abspath(__file__)), "../rep
 def tex_formattted_string (string): # YAML header is translated into latex by pandoc; we have to tell it's already translated
     return "\"`" + string + "`{=latex}\""  # returns  "`/usr/file_name.txt`{=latex}"
 
-def generate_time_heatmap (df0, date_col = None, group_col = None, use_max = True, label_interval = None):
-    if date_col is None: date_col = "collection_date"
-    if group_col is None: group_col = "lineage"
-    if label_interval is None: label_interval = 7 #  once every week
-    df = df0
-    df["date"] = pd.to_datetime(df["collection_date"], infer_datetime_format=False, errors='coerce')
-    ## see also df.pivot(a,b,c) which takes df with cols a,b,c and create axb matrix with c values
-    df = df.groupby(["date","adm2"]).size().unstack() ## real one will use cluster_id, not adm 
+def plot_over_clusters (csv, tree, min_cluster_size = None, output_dir=None):
+    if output_dir is None: output_dir = cwd
+    if min_cluster_size is None: min_cluster_size = 2
+    df = csv.copy()
+    clist = ["adm2", "lineage", "uk_lineage", "collection_date"]
+    cname = ["Administration", "Lineages", "UK lineage", "Date"]
 
-    idx = pd.date_range(df.index.min(),df.index.max(), freq="1D") # creates uniform interval
-    df.fillna(0,inplace=True) ## otherwise nan is treated differently
-    df = df.reindex(idx, fill_value = 0) # does not accept inplace
-    ## df.asfreq('D') # simpler alternative to idx[] above, to interpolate df with regular ("D"aily) intervals
-
-    recent = {}
-    if use_max: # sort by most recent case
-        for column in df.columns:
-            res = max (((df.index - df.index.values.min())/peroba.np.timedelta64(1, 'D')).astype(int) * (df[column].astype(peroba.np.int64())>0))
-            recent[column] = res
-    else: # sort by weighted average of dates (weights are number of cases)
-        for column in df.columns:
-            x = ((df.index - df.index.values.min())/peroba.np.timedelta64(1, 'D')).astype(int)
-            res = sum(x * df[column].astype(peroba.np.int64()))/sum(df[column].astype(peroba.np.int64()))
-            recent[column] = res
-
-    reclist = [k for k, v in sorted(recent.items(), key=lambda item: item[1], reverse=True)]
-    labs = ["" if i%label_interval else a for i,a in enumerate(df.index.strftime('%Y-%m-%d'))]
-    return df[reclist], labs
-
-def new_date_column_with_jitter (df0, original_date_col = None, new_date_col = None, label_interval = None):
-    """ this function can be merged with above? or we can recalc here the column order, using most recent dates:
-    we can sort the float dates and sum first 3 or 5...
-    """ 
-
-    if new_date_col is None: new_date_col = "float_date"
-    if original_date_col is None: original_date_col = "collection_date"
-    if label_interval is None: label_interval = 7 #  once every week
-    tmp_col = new_date_col + "TMP"
-    df[tmp_col] = pd.to_datetime(df0[original_date_col], infer_datetime_format=False, errors='coerce')
-    df[new_date_col] = ((df[tmp_col] - df[tmp_col].min())/peroba.np.timedelta64(1, 'D')).astype(float) +  np.random.uniform(-0.35,0.35, len(df[tmp_col]))
-    # below is WRONG since the x-axis does NOT follow table order!
-    labs = ["" if i%label_interval else a for i,a in enumerate(df[tmp_col].dt.strftime('%Y-%m-%d'))] # notice the "dt"to convert
-    return df[new_date_col], labs
-
-## plot the heatmap with 
-# df2 = df2.T ## transpose rows and cols
-#g = sns.heatmap( df2, mask=df2.isnull(), square=False, cmap= 'Blues', linewidth=0.5
-#    cbar_kws={'fraction' : 0.005, "ticks":[0,df.values.max()]})# fraction= shrink colorbar size, ticks=text,
-## alternatives to labs[] above: to make seaborn decide number of tick labels
-#x = g.set_xticklabels(df.index.strftime('%Y-%m-%d')) 
-##  or, to have one tick per week: (strftime above can be removed but then seaborn may decide to drop some)
-#x = g.get_xticklabels()
-#for i, lab in enumerate(x):
-#    if i%7:
-#        lab.set_text("")
-#    else:
-#        lab.set_text(lab.get_text()[:10])
-#x = g.set_xticklabels (x, rotation=30, horizontalalignment='right', fontweight='light')
-
-## plot using the jitter (Although not reordered, can use order from heatmap...)
-# g = peroba.sns.stripplot(y="lineage", x="date_float", edgecolor="black", jitter=0.3, linewidth=0.1, marker="o", alpha=0.8, s=2, data=df2)
-
-def plot_genomes_sequenced_over_time (metadata, output_dir):
-    df = metadata.copy() 
-    logger.debug("counter: ", str(collections.Counter(df["submission_org_code"]).most_common(25)))
-    ## *similar* (not equal) to df.pivot(a,b,c) that takes df with cols a,b,c and create axb matrix with c values
-    df = df[df["submission_org_code"].str.contains("NORW", na=False)] 
-    #df = df.groupby(["date","adm2"]).size().to_frame("size").reset_index()  #.unstack()
-    df["region"] = df["adm2"].map({"NORFOLK":"Norfolk", "Norfolk":"Norfolk"}).fillna("others") # maps only Norfolk; other rows become NaN (which is filled by "others")
-
-    plt.figure(figsize=(10,6)); sns.set()
-    #rcParams['figure.figsize'] = 12,4
-    sns.set_context("paper", rc={"figure.dpi":300, "font.size":8,
-                                "axes.titlesize":8,"axes.labelsize":8, 
-                                "xtick.labelsize":6, "ytick.labelsize":6})  
-    sns.set_palette("cubehelix", 3)
-    g = sns.countplot(x="collection_date", hue="region", data=df)
-    g.set(title="Genomes sequenced at QIB over time", xlabel="", ylabel="Number of samples")
-    leg = g.axes.legend()
-    leg.set(title="sampling region")
-    plt.setp(leg.get_texts(), fontweight='light', fontsize=8)
-    plt.setp(leg.get_title(),  fontweight='normal', fontsize=8)
-    x = g.get_xticklabels()
-    for lab in x:
-        lab.set_text(lab.get_text()[:10])
-    x = g.set_xticklabels (x, rotation=30, horizontalalignment='right', fontweight='light')
-    
     md_description = """
-## Genomes sequenced at the QIB considered here PLEASE DO NOT USE 
-These counts are **not** the total sums, they are based on the merged database (which remove data without sequence etc.)
-"""
-    md_description += "\n<br>![](genomes_over_time.pdf)\n<br>\n" # same directory as report.md, it doesn't need full path? 
-    fname = os.path.join(output_dir,"genomes_over_time.pdf")
-    g.figure.savefig(fname, format="pdf")  # or plt.savefig()
-    g.figure.clf()
-    return md_description 
+## Phylogenetic clusters\n
+Only clusters with more than {minc_size} elements are shown.
+""".format (minc_size = min_cluster_size)
 
-def plot_jitter_lineages (metadata, output_dir):
-    df = metadata.copy() 
-    df["date_float"] = ((df["collection_date"] - df["collection_date"].min())/np.timedelta64(1, 'D')).astype(float) + np.random.normal(0,0.1, len(df["collection_date"]))
-    df = df[df["adm2"].str.contains("folk",na=False)]
-    print (df["date_float"])
-    
-    plt.figure(figsize=(10,6)); sns.set()
-    sns.set_context("paper", rc={"figure.dpi":300, "font.size":8,
-                                "axes.titlesize":8,"axes.labelsize":8, 
-                                "xtick.labelsize":6, "ytick.labelsize":6})  
-    #df2["date"].strftime('%Y-%m-%d')
-    g = sns.stripplot (y="lineage", x="date_float", edgecolor="black", jitter=0.3, linewidth=0.1, marker="o", alpha=0.8, s=2, data=df)
-    #x = g.set_xticklabels(df2["date"].dt.strftime('%Y-%m-%d'))  ## order in table is NOT PLOT ORDER!
-    #x = g.get_xticklabels ()
-    #for lab in x:
-    #    print (lab)
-    #    lab.set_text(float_to_date[lab.get_text()])
-    #x = g.set_xticklabels ([1,2,3, 30])
-    ## see also https://www.machinelearningplus.com/plots/top-50-matplotlib-visualizations-the-master-plots-python/
-    md_description = """
-## PLEASE DO NOT USE 
-the days are a float number 
-"""
-    md_description += "\n<br>![](jitter_lineages.pdf)\n<br>\n" # same directory as report.md, it doesn't need full path? 
-    fname = os.path.join(output_dir,"jitter_lineages.pdf")
-    g.figure.savefig(fname, format="pdf")
-    g.figure.clf()
+    sub_csv, sub_tree, this_description = phylo.ASR_subtrees (csv, tree)
+    md_description += this_description
+
+    colmap_dict = phylo.colormap_from_dataframe (df, column_list = clist, column_names=cname)
+    ts = phylo.return_treestyle_with_columns (colmap_dict)
+
+    for i,(c,t) in enumerate(zip(sub_csv,sub_tree)):
+        if len(c) > min_cluster_size:
+            this_description = phylo.plot_single_cluster (c, t, i, ts, output_dir)
+            md_description += this_description
+
+    md_description += """
+
+The complete phylogenetic tree is displayed in a separate document due to its large size.<br>
+
+\n<br>(report generated at {today})<br>
+This is a **temporary draft** and the numbers have **not** been checked. 
+Software still under development.<br>
+""".format(today=datetime.datetime.now().strftime("%Y-%m-%d %H:%M")) 
+    tree.render(os.path.join(output_dir,"full_tree.pdf"), w=1200, tree_style=ts)
+
     return md_description 
 
 def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
@@ -222,61 +132,18 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
             del tree_leaves[i]
         tree.prune([node for node in tree_leaves.values()], preserve_branch_length=True) # or leafnames, but fails on duplicates
 
+    leaf_list = [leaf.name for leaf in tree.iter_leaves()] # may have duplicates
+    tree_length = len(leaf_list)
+    tree_leaves = {str(leaf.name):leaf for leaf in tree.iter_leaves()} # dup leaves will simply overwrite node information
+    if (tree_length > len(tree_leaves)):
+        tree.prune([node for node in tree_leaves.values()], preserve_branch_length=True) # or leafnames, but fails on duplicates
+        logger.warning("After mapping/merging, some leaves have same name -- e.g. if the same sequence was included twice in the")
+        logger.warning("  phylogenetic analysis, one copy from the NORW database and one from COGUK. I will keep one of them, at random")
+        logger.warning("  some examples (whenever counter>1): %s",str(collection.Counter([leaf_list]).most_common(20)))
+
     metadata0 = df_merge_metadata_by_index (csv, metadata0) 
     metadata0["collection_date"] = pd.to_datetime(metadata0["collection_date"], infer_datetime_format=False, errors='coerce')
     return metadata0, csv, tree, tree_leaves
-
-def fix_csv_columns (csv, csv_cols=None):
-    if csv_cols is None: 
-        csv_cols = ["adm2", "Postcode", "submission_org_code", "date_sequenced",
-                "source_age", "source_sex", "collecting_org", "ICU_admission", "PCR Ct value", "Repeat Sample ID"]
-    csv_cols = [x for x in csv_cols if x in csv.columns]
-    if csv_cols:
-        if "submission_org_code" in csv_cols:
-            csv.loc[~csv["submission_org_code"].str.contains("NORW", na=False), "date_sequenced"] = "nil" # only for NORW
-        for col in csv_cols:
-            csv[col].fillna("nil", inplace=True)
-        if "ICU_admission" in csv_cols:
-            csv["ICU_admission"] = csv["ICU_admission"].replace("Unknown", "nil", regex=True)
-    logger.info ("Follow-up columns found in CSV: %s", " ".join(csv_cols))
-    return csv, csv_cols
-
-def ASR_subtrees (metadata0, tree0, csv_cols = None, reroot = True, method = None):
-    """ ancestral state reconstruction assuming binary or not. Clusters are based on "locality": patient is from Norfolk
-    *or* was sequenced here in NORW.
-    One column at a time, so the n_threads doesn't help.
-    """
-    if method is None: method = ["DOWNPASS", "DOWNPASS"]
-    if isinstance (method, str): method = [method, method]
-
-    metadata = metadata0.copy()  # work with copies
-    tree = tree0.copy()
-    if reroot: ## this should be A,B 
-        R = tree.get_midpoint_outgroup()
-        tree.set_outgroup(R)
-
-    md_description="""
-    Sequence clusters are based on "locality": patients from Norfolk (field `adm2`) *or* patients that were sequenced here
-    (submission org = `NORW`). <br>
-    """
-    ## subtrees will be defined by 'locality'
-    yesno = (metadata["adm2"].str.contains("Norfolk", case=False)) | (metadata["submission_org_code"].str.contains("NORW", case=False))
-    df = pd.DataFrame(yesno.astype(str), columns=["local"], index=metadata.index.copy())
-    x = get_binary_trait_subtrees (tree, df, trait_column = "local", trait_value = "True", elements = 1, method=method[0])
-    subtree, mono, result, trait_name = x  # most important is subtree
-    print (mono)
-    
-    ## decorate the tree with ancestral states
-    if (csv_cols):
-        result = acr (tree, df, prediction_method = method[1], force_joint=False) ## annotates tree nodes with states (e.g. tre2.adm2)
-
-    node2leaves = tree.get_cached_content(store_attr="name") # dict node:[leaves]
-    submetadata = [metadata.loc[metadata.index.isin(node2leaves[x])] for x in subtree]
-    # not currently used
-    supermetadata = [metadata.loc[metadata.index.isin(node2leaves[x.up])] for x in subtree if x.up]
-
-    return subtree, submetadata, md_description
-
 
 def prepare_report_files (metadata, csv, tree, tree_leaves, input_dir, output_dir, title_date):
     mkd_file_name = os.path.join(output_dir,f"report_{title_date}.md")
@@ -315,14 +182,14 @@ geometry:
     report_fw = open (mkd_file_name, "w")
     report_fw.write(md_description)
 
-    ## prepare data (merging, renaming, main ASR)
-    csv, csv_cols = fix_csv_columns (csv)
+    ## prepare data (merging, renaming)
     metadata, csv, tree, tree_leaves = merge_metadata_with_csv (metadata, csv, tree, tree_leaves)
-    sub_tree, sub_csv, description = ASR_subtrees (csv, tree, csv_cols)
     ## start plotting 
-    md_description = plot_jitter_lineages (metadata, output_dir)
+    md_description = plot_over_clusters (csv, tree, min_cluster_size = 2, output_dir=output_dir)
     report_fw.write(md_description)
-    md_description = plot_genomes_sequenced_over_time (metadata, output_dir)
+    md_description = stdraw.plot_jitter_lineages (metadata, output_dir)
+    report_fw.write(md_description)
+    md_description = stdraw.plot_genomes_sequenced_over_time (metadata, output_dir)
     report_fw.write(md_description)
     
     report_fw.close()
@@ -378,7 +245,7 @@ def main():
     tree_leaves = {str(leaf.name):leaf for leaf in tree.iter_leaves()} # dup leaves will simply overwrite node information
     if (tree_length > len(tree_leaves)):
         tree.prune([node for node in tree_leaves.values()], preserve_branch_length=True) # or leafnames, but fails on duplicates
-        logger.debug("Found duplicate leaf names, will keep one at random")
+        logger.warning("Found duplicated leaf names in input treefile, will keep one at random")
     logger.info("%s leaves in treefile and metadata with shape %s", len(tree_leaves), str(metadata.shape))
 
     markdown_text = prepare_report_files (metadata, csv, tree, tree_leaves, input_d, output_d, title_date)

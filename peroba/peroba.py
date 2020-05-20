@@ -3,7 +3,7 @@
 ## TODO: "UNKNOWN SOURCE" and "UNKNOWN" are the same adm2 (in cog)
 
 #import utils 
-from utils import *
+from utils_v1 import *
 
 class DataSeqTree:   
     """ Basic structure with all available data: sequence, tree, and epi-metadata, with file location information
