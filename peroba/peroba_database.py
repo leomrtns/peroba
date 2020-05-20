@@ -194,11 +194,8 @@ class PerobaDatabase:
         if self.sequences is None:  self.sequences = dict(); 
         for f in sequence_filelist:
             filepath = dbpath + f
-            if   "bz2" in f: zipmode = "bz2"
-            elif "gz"  in f: zipmode = "gz"
-            else:            zipmode = None
             logger.info(f"Reading sequence file {f}")
-            seqs = read_fasta (filepath, zip = zipmode, check_name = True) # list
+            seqs = read_fasta (filepath, check_name = True) # list
             self.sequences.update({x.id:x for x in seqs})  # dictionary of SeqRecord() (so duplicates are simply overwritten)
 
         logger.info("Database now has %s valid sequences", str(len(self.sequences)))

@@ -170,10 +170,7 @@ class DataSeqTree:
         if self.sequences is None:  self.sequences = dict(); 
         for f in sequence_filelist:
             filepath = dbpath + f
-            if   "bz2" in f: zipmode = "bz2"
-            elif "gz"  in f: zipmode = "gz"
-            else:            zipmode = None
-            seqs = read_fasta (filepath, zip = zipmode, check_name = True) # list
+            seqs = read_fasta (filepath, check_name = True) # list
             self.sequences.update({x.id:x for x in seqs})  # dictionary of SeqRecord() (so duplicates are simply overwritten)
 
         print_redblack ("LOG:: number of valid sequences:", len(self.sequences))
@@ -302,9 +299,6 @@ class DataSeqTree:
         elif use_db_path:       dbpath = f"{use_db_path}/"
         else:                   dbpath = ""
         filepath = dbpath + sequence_file
-        if   "bz2" in sequence_file: zipmode = "bz2"
-        elif "gz"  in sequence_file: zipmode = "gz"
-        else:                        zipmode = None
         ## read local csv, which may contain info on rejected samples (e.g. as 2020.05.12 there are 
         ## 452 rows but only 302 sequences, since 150 were not sequenced yet or QC rejected)
         norwmeta = df_read_genome_metadata (metadata_file, index_name = "central_sample_id")
@@ -314,7 +308,7 @@ class DataSeqTree:
         norwmeta["submission_org"] = "Norwich"
         
         ## number of sequences is smaller than metadata; named by central_sample_id
-        seq_matrix = read_fasta (filepath, zip = zipmode, check_name = False) 
+        seq_matrix = read_fasta (filepath, check_name = False) 
         norwseqnames = [x.id for x in seq_matrix]
         
         ## temporarily use central_sample_id as index, so that we can merge_by_index

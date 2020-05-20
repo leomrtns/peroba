@@ -17,7 +17,8 @@ import sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, ran
 def print_redblack(textr="", textb=""):
     print ('\x1b[0;1;31;1m'+ str(textr) + '\x1b[0;1;30;1m'+ str(textb) + '\x1b[0m')
 
-def read_fasta (filename, zip = "bz2", fragment_size = 0, check_name = False, debug = False):
+def read_fasta_original (filename, zip = "bz2", fragment_size = 0, check_name = False, debug = False):
+    # This version has the "zip" parameter, but currently I am assuming the suffix has it
     unaligned = []
     if (zip == "bz2"):
         this_open = bz2.open
@@ -25,6 +26,34 @@ def read_fasta (filename, zip = "bz2", fragment_size = 0, check_name = False, de
         this_open = gzip.open
     else:
         this_open = open
+    with this_open(filename, "rt") as handle:
+        for record in SeqIO.parse(handle, "fasta"):
+            record.seq  = record.seq.upper()
+            # record.name = name_without_spaces.hash() ## IDEA
+             # # seq names are a mess, it's better to map using metadata as key (however we have keys as "D02" etc
+            # COG-UK/SHEF-D34A0/SHEF:20200423_1347_X1_FAN43269_d941f767|SHEF-D34A0|... 
+            # COG-UK/OXON-AF08B/OXON
+            # EPI_ISL_422016|hCoV-19/Wales/PHWC-26796/2020|Wales|WALES|2020-03-28|PHWC|...
+            # hCoV-19/England/201140442/2020|PENDING|England|GREATER_LONDON|2020-03-10|PHEC|2
+            # hCoV-19/England/CAMB-74D3D/2020||England|CAMBRIDGESHIRE|2020-03-19|  also hCoV Hcov hcoV etc.
+            if (check_name and "|" in record.description): # consensus from COGUK and GISAID names: `hCoV-19/Australia/NT12/2020|EPI_ISL_426900|2020-03-25`
+                seqname = record.description.split("|")[0]
+                record.id = seqname.replace("hCoV-19/","")
+            if len(record.seq) > fragment_size:
+                unaligned.append(record)
+    if (debug):
+        print_redblack ("first record length: " + str(len(unaligned[0].seq)))
+        print (unaligned[0])
+
+    return unaligned
+
+def read_fasta (filename, fragment_size = 0, check_name = False, debug = False):
+    unaligned = []
+    if   "bz2" in filename[-5:]: this_open = bz2.open
+    elif "gz"  in filename[-5:]: this_open = gzip.open
+    elif "xz"  in filename[-5:]: this_open = lzma.open
+    else:  this_open = open
+      
     with this_open(filename, "rt") as handle:
         for record in SeqIO.parse(handle, "fasta"):
             record.seq  = record.seq.upper()

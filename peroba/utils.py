@@ -10,19 +10,18 @@ import ete3
 import numpy as np, pandas as pd, seaborn as sns
 from sklearn import manifold, metrics, cluster, neighbors, decomposition, preprocessing
 import skbio, parasail, dendropy, datetime, time, codecs, joypy
-import sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib
+import sys, gzip, lzma, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib
 
 def print_redblack(textr="", textb=""):
     print ('\x1b[0;1;31;1m'+ str(textr) + '\x1b[0;1;30;1m'+ str(textb) + '\x1b[0m')
 
-def read_fasta (filename, zip = "bz2", fragment_size = 0, check_name = False, debug = False):
+def read_fasta (filename, fragment_size = 0, check_name = False, debug = False):
     unaligned = []
-    if (zip == "bz2"):
-        this_open = bz2.open
-    elif (zip == "gz"):
-        this_open = gzip.open
-    else:
-        this_open = open
+    if   "bz2" in filename[-5:]: this_open = bz2.open
+    elif "gz"  in filename[-5:]: this_open = gzip.open
+    elif "xz"  in filename[-5:]: this_open = lzma.open
+    else:  this_open = open
+      
     with this_open(filename, "rt") as handle:
         for record in SeqIO.parse(handle, "fasta"):
             record.seq  = record.seq.upper()
