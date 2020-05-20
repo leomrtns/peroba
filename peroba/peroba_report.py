@@ -44,7 +44,10 @@ Only clusters with more than {minc_size} elements are shown.
 
     for i,(c,t) in enumerate(zip(sub_csv,sub_tree)):
         if len(c) > min_cluster_size:
+            md_description += f"\n### Cluster {i}\n"
             this_description = phylo.plot_single_cluster (c, t, i, ts, output_dir)
+            md_description += this_description
+            this_description = stdraw.plot_bubble_per_cluster (c, i, output_dir)
             md_description += this_description
 
     md_description += """
@@ -138,8 +141,8 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
     if (tree_length > len(tree_leaves)):
         tree.prune([node for node in tree_leaves.values()], preserve_branch_length=True) # or leafnames, but fails on duplicates
         logger.warning("After mapping/merging, some leaves have same name -- e.g. if the same sequence was included twice in the")
-        logger.warning("  phylogenetic analysis, one copy from the NORW database and one from COGUK. I will keep one of them, at random")
-        logger.warning("  some examples (whenever counter>1): %s",str(collection.Counter([leaf_list]).most_common(20)))
+        logger.warning("  phylogenetic analysis, one copy from the NORW database and one from COGUK. I will keep only one of each, at random")
+        logger.warning("  some examples (whenever counter>1): %s", str(collections.Counter(leaf_list).most_common(20)))
 
     metadata0 = df_merge_metadata_by_index (csv, metadata0) 
     metadata0["collection_date"] = pd.to_datetime(metadata0["collection_date"], infer_datetime_format=False, errors='coerce')
@@ -194,7 +197,7 @@ geometry:
     
     report_fw.close()
 
-    runstr = f"pandoc {mkd_file_name} -o {pdf_file_name} --from markdown --template {pandoc_template_name} --listings"
+    runstr = f"cd {output_dir} && pandoc {mkd_file_name} -o {pdf_file_name} --from markdown --template {pandoc_template_name} --listings"
     logger.info("running command:: %s", runstr)
     proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)
     logger.debug("output verbatim:\n%s",proc_run)

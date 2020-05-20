@@ -10,16 +10,18 @@ from sklearn import manifold, metrics, cluster, neighbors, decomposition, prepro
 import sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib
 
 logger = logging.getLogger(__name__)
-#logger.propagate = False
+logger.propagate = False
 stream_log = logging.StreamHandler()
 log_format = logging.Formatter(fmt='peroba %(asctime)s [%(levelname)s] %(message)s', datefmt="%Y-%m-%d %H:%M")
 stream_log.setFormatter(log_format)
 stream_log.setLevel(logging.DEBUG)
 logger.addHandler(stream_log)
+    
+seaborn_rc = {"figure.dpi":300, "font.size":8, "axes.titlesize":8,"axes.labelsize":8, "xtick.labelsize":6, "ytick.labelsize":6}  
 
 def generate_time_heatmap (df0, date_col = None, group_col = None, use_max = True, label_interval = None):
     if date_col is None: date_col = "collection_date"
-    if group_col is None: group_col = "lineage"
+    if group_col is None: group_col = "adm2"
     if label_interval is None: label_interval = 7 #  once every week
     df = df0
     df["date"] = pd.to_datetime(df["collection_date"], infer_datetime_format=False, errors='coerce')
@@ -61,17 +63,6 @@ def new_date_column_with_jitter (df0, original_date_col = None, new_date_col = N
     labs = ["" if i%label_interval else a for i,a in enumerate(df[tmp_col].dt.strftime('%Y-%m-%d'))] # notice the "dt"to convert
     return df[new_date_col], labs
 
-def plotper_group_bubble():
-    df=subm[6]
-    df = df.groupby(["collection_datetime","adm2"]).size().to_frame(name="size")
-    df = df.reset_index() # collection and adm2 are indices of series (that we transformed into frame)
-    display(df)
-    peroba.sns.set(font_scale=1); peroba.sns.set_palette("cubehelix", 8) 
-    g = peroba.sns.scatterplot(y="adm2", x="collection_datetime", size="size", edgecolor="white", alpha=0.8, s=10, data=df)
-    #g.set_xticklabels(g.get_xticklabels(), rotation=45, horizontalalignment='right') # nt working
-     plt.xticks(rotation=45, horizontalalignment='right') # alternative to loop above (pyplot only)
-
-
 ## plot the heatmap with 
 # df2 = df2.T ## transpose rows and cols
 #g = sns.heatmap( df2, mask=df2.isnull(), square=False, cmap= 'Blues', linewidth=0.5
@@ -98,11 +89,8 @@ def plot_genomes_sequenced_over_time (metadata, output_dir):
     #df = df.groupby(["date","adm2"]).size().to_frame("size").reset_index()  #.unstack()
     df["region"] = df["adm2"].map({"NORFOLK":"Norfolk", "Norfolk":"Norfolk"}).fillna("others") # maps only Norfolk; other rows become NaN (which is filled by "others")
 
-    plt.figure(figsize=(10,6)); sns.set()
+    plt.figure(figsize=(10,8)); sns.set(); sns.set_context("paper", rc=seaborn_rc);
     #rcParams['figure.figsize'] = 12,4
-    sns.set_context("paper", rc={"figure.dpi":300, "font.size":8,
-                                "axes.titlesize":8,"axes.labelsize":8, 
-                                "xtick.labelsize":6, "ytick.labelsize":6})  
     sns.set_palette("cubehelix", 3)
     g = sns.countplot(x="collection_date", hue="region", data=df)
     g.set(title="Genomes sequenced at QIB over time", xlabel="", ylabel="Number of samples")
@@ -130,12 +118,8 @@ def plot_jitter_lineages (metadata, output_dir=None):
     df = metadata.copy() 
     df["date_float"] = ((df["collection_date"] - df["collection_date"].min())/np.timedelta64(1, 'D')).astype(float) + np.random.normal(0,0.1, len(df["collection_date"]))
     df = df[df["adm2"].str.contains("folk",na=False)]
-    print (df["date_float"])
     
-    plt.figure(figsize=(10,6)); sns.set()
-    sns.set_context("paper", rc={"figure.dpi":300, "font.size":8,
-                                "axes.titlesize":8,"axes.labelsize":8, 
-                                "xtick.labelsize":6, "ytick.labelsize":6})  
+    plt.figure(figsize=(10,6)); sns.set(); sns.set_context("paper", rc=seaborn_rc);
     #df2["date"].strftime('%Y-%m-%d')
     g = sns.stripplot (y="lineage", x="date_float", edgecolor="black", jitter=0.3, linewidth=0.1, marker="o", alpha=0.8, s=2, data=df)
     #x = g.set_xticklabels(df2["date"].dt.strftime('%Y-%m-%d'))  ## order in table is NOT PLOT ORDER!
@@ -154,4 +138,21 @@ the days are a float number
     g.figure.savefig(fname, format="pdf")
     g.figure.clf()
     return md_description 
+
+def plot_bubble_per_cluster (metadata, counter, output_dir):
+    fname = f"bubble{counter}.pdf"
+    df=metadata.copy()
+    df = df.groupby(["collection_datetime","adm2"]).size().to_frame(name="size")
+    df = df.reset_index() # collection and adm2 are indices of series (that we transformed into frame)
+
+    plt.figure(figsize=(12,4)); sns.set(font_scale=1); sns.set_context("paper", rc=seaborn_rc);
+    sns.set_palette("cubehelix", 8)
+    g = sns.scatterplot(y="adm2", x="collection_datetime", size="size", edgecolor="white", alpha=0.8, s=40, data=df)
+    #g.set_xticklabels(g.get_xticklabels(), rotation=45, horizontalalignment='right') # nt working
+    plt.xticks(rotation=30, horizontalalignment='right') # alternative to loop above (pyplot only)
+
+    md_description = f"\n![bubble{counter}]({fname})\n<br>\n"
+    g.figure.savefig(os.path.join(output_dir,fname), format="pdf")  # or plt.savefig()
+    g.figure.clf()
+    return md_description
 

@@ -11,7 +11,7 @@ from sklearn import manifold, metrics, cluster, neighbors, decomposition, prepro
 import sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib
 
 logger = logging.getLogger(__name__) 
-#logger.propagate = False
+logger.propagate = False ## otherwise it duplicates (own stream and generic stream)
 stream_log = logging.StreamHandler()
 log_format = logging.Formatter(fmt='peroba %(asctime)s [%(levelname)s] %(message)s', datefmt="%Y-%m-%d %H:%M")
 stream_log.setFormatter(log_format)
@@ -40,6 +40,7 @@ def get_ancestral_trait_subtrees (tre, csv, tiplabel_in_csv = None, elements = 1
         trait_value = trait_value[0] ## This function can handle only one value; for grouping try the get_binary version
     ## Ancestral state reconstruction of given trait
     result = acr (tre, csv_column, prediction_method = method, force_joint=False, threads=n_threads) ## annotates tree nodes with states (e.g. tre2.adm2)
+    logger.debug("Finished lowlevel ancestral_trait_subtrees()")
 
     ## Find all internal nodes where trait_value is possible state (b/c is seen at tips below)
     matches = filter(lambda n: not n.is_leaf() and trait_value in getattr(n,trait_column) and
@@ -88,6 +89,8 @@ def get_binary_trait_subtrees (tre, csv,  tiplabel_in_csv = None, elements = 1,
     
     for leafnode, leafname  in tree_leaf_nodes.items(): # our tree may have dups, and pastml (correctly) replaces them by a placeholder "t123" 
         leafnode.name = leafname  # here we revert back to duplicate names (dictionary keys are nodes, and values are original names 
+
+    logger.debug("Finished lowlevel binary_trait_subtrees()")
 
     stored_leaves = set () # set of leaf names (created with get_cached_content)
     subtrees = [] # list of non-overlapping nodes
@@ -140,6 +143,8 @@ def colormap_from_dataframe (df, column_list, column_names, cmap_list = None):
                 d_seq_lab[seq].append(str(" "))
     return [d_seq, d_seq_lab, d_col, column_names] 
 
+
+
 def return_treestyle_with_columns (cmapvector):
     '''
     Need column names again to print header in order 
@@ -147,35 +152,31 @@ def return_treestyle_with_columns (cmapvector):
     [d_seq, d_seq_lab, d_col, column_names] = cmapvector
     label_font_size = 6
 
-    # default node
+    # default node (not used since it's lost with any customisation, so we create all node styles independently)
     ns1 = ete3.NodeStyle()
-    ns1["size"] = 1 ## small dot 
-    ns1["shape"] = "square" ## small dot 
-    ns1["fgcolor"] = "101010" ## small dot 
+    ns1["size"] = 1;  ns1["shape"] = "square" ; ns1["fgcolor"] = "101010" 
     ns1["hz_line_type"]  = ns1["vt_line_type"]  = 0 # 0=solid, 1=dashed, 2=dotted
-    ns1["hz_line_color"] = ns1["vt_line_color"] = "#0c0c0c"
-    ns2 = ete3.NodeStyle()
-    ns2["size"] = 0 ## no dot
-    ns2["shape"] = "circle" ## small dot 
-    ns2["hz_line_type"]  = ns1["vt_line_type"]  = 0 # 0=solid, 1=dashed, 2=dotted
-    ns2["hz_line_color"] = ns1["vt_line_color"] = "#0c0c0c"
+    ns1["hz_line_color"] = ns1["vt_line_color"] = "darkred"
+    def tree_profile_layout (node):# prepare table and other node information (local function so mind the identation) 
+        if "NORW" in (getattr(node, "submission_org_code")):  this_color = "darkred"
+        else:     this_color = "#050505"
 
-    ## prepare table and other node information (don't adjust your TV or the identation, this is a local function)
-    def tree_profile_layout (node):
+        node.img_style['hz_line_type']  = node.img_style['vt_line_type'] = 0 # 0=solid, 1=dashed, 2=dotted
+        node.img_style['hz_line_width'] = node.img_style['vt_line_width'] = 3 
+        node.img_style['hz_line_color'] = node.img_style['vt_line_color'] = this_color
+
         if node.is_leaf(): # the aligned leaf is "column 0", thus traits go to column+1
-            print (node.name)
-            node.set_style(ns1) ## may be postponed to when we have ancestral states
+            node.img_style['size'] = 2; node.img_style['shape'] = "sphere";  node.img_style['fgcolor'] = this_color 
             ete3.add_face_to_node(ete3.AttrFace("name", fsize=label_font_size, text_suffix="   "), node, 0, position="aligned")
             for column, (rgb_val, lab) in enumerate(zip(d_seq[node.name], d_seq_lab[node.name])): ## colour of csv.loc[node.name, "adm2"]
                 label = {"text": lab[:10], "color":"Black", "fontsize": label_font_size-1}
                 ete3.add_face_to_node (ete3.RectFace (50, 10, fgcolor=rgb_val, bgcolor=rgb_val, label = label), node, column+1, position="aligned")
         else:
-            node.set_style(ns2) 
-            #node.img_style['hz_line_color'] = node.img_style['vt_line_color'] =
+            node.img_style['size'] = 0; 
 
     ts = ete3.TreeStyle()
     ts.draw_guiding_lines = True # dotted line between tip and name
-    ts.guiding_lines_color = "#bdb76d"
+    ts.guiding_lines_color = "#f4f4f4" # "#bdb76d"
     ts.guiding_lines_type = 2 #  0=solid, 1=dashed, 2=dotted
     ts.layout_fn = tree_profile_layout
     ts.branch_vertical_margin = 0
@@ -216,18 +217,20 @@ def ASR_subtrees (metadata0, tree, csv_cols = None, reroot = True, method = None
         tree.set_outgroup(R)
 
     md_description="""
-    Sequence clusters are based on "locality": patients from Norfolk (field `adm2`) *or* patients that were sequenced here
-    (submission org = `NORW`). <br>
+Sequence clusters are based on "locality": patients from Norfolk (field `adm2`) *or* patients that were sequenced here
+(submission org = `NORW`). <br>
     """
     ## subtrees will be defined by 'locality'
     yesno = (metadata["adm2"].str.contains("Norfolk", case=False)) | (metadata["submission_org_code"].str.contains("NORW", case=False))
     df = pd.DataFrame(yesno.astype(str), columns=["local"], index=metadata.index.copy())
     x = get_binary_trait_subtrees (tree, df, trait_column = "local", trait_value = "True", elements = 1, method=method[0])
     subtree, mono, result, trait_name = x  # most important is subtree
+    logger.info("Finished estimating ancestral state for 'locality', which defines clusters")
     
     ## decorate the tree with ancestral states
     csv, csv_cols = prepare_csv_columns_for_asr (metadata)
     if (csv_cols):
+        logger.info("Will now estimate ancestral states for %s", " ".join(csv_cols))
         tree_leaf_nodes = {leaf:leaf.name for leaf in tree.iter_leaves()} # in case we have duplicated names 
         result = acr (tree, csv, prediction_method = method[1], force_joint=False) ## annotates tree nodes with states (e.g. tre2.adm2)
         for leafnode, leafname  in tree_leaf_nodes.items(): # pastml (correctly) replaces duplicated names by a placeholder like "t123" 
@@ -270,7 +273,7 @@ def plot_single_cluster (csv, tree, counter, ts = None, output_dir=None):
     df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
     
     tree.render(os.path.join(output_dir,fname), w=800, tree_style=ts)
-    md_description += f"\n![tree{counter}]({fname})\n<br>"
+    md_description += f"\n![tree{counter}]({fname})\n<br>\n"
     # report_md += df.to_html(max_rows=4, max_cols=20)
     # report_md += "<hr>\n"
 
