@@ -7,6 +7,7 @@ from matplotlib import rcParams
 from utils import *
 import phylodrawing as phylo
 import statsdrawing as stdraw
+import common
 
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False
@@ -28,7 +29,7 @@ def plot_over_clusters (csv, tree, min_cluster_size = None, output_dir=None):
     if output_dir is None: output_dir = cwd
     if min_cluster_size is None: min_cluster_size = 2
     df = csv.copy()
-    clist = ["adm2", "lineage", "uk_lineage", "collection_date"]
+    clist = ["adm2", "lineage", "uk_lineage", "collection_datetime"]
     cname = ["Administration", "Lineages", "UK lineage", "Date"]
 
     md_description = """
@@ -36,14 +37,16 @@ def plot_over_clusters (csv, tree, min_cluster_size = None, output_dir=None):
 Only clusters with more than {minc_size} elements are shown.
 """.format (minc_size = min_cluster_size)
 
-    sub_csv, sub_tree, this_description = phylo.ASR_subtrees (csv, tree)
+    sub_csv, sub_tree, this_description, csv = phylo.ASR_subtrees (csv, tree)
     md_description += this_description
 
-    colmap_dict = phylo.colormap_from_dataframe (df, column_list = clist, column_names=cname)
+    colmap_dict = phylo.colormap_from_dataframe (csv, column_list = clist, column_names=cname) # csv may have ASR inferred
+    #colmap_dict = phylo.colormap_from_dataframe (df, column_list = clist, column_names=cname)
     ts = phylo.return_treestyle_with_columns (colmap_dict)
 
     for i,(c,t) in enumerate(zip(sub_csv,sub_tree)):
         if len(c) > min_cluster_size:
+            print (c["lineage"])
             md_description += f"\n### Cluster {i}\n"
             this_description = phylo.plot_single_cluster (c, t, i, ts, output_dir)
             md_description += this_description
@@ -105,7 +108,7 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
     csv.dropna      (axis=1, how='all', inplace=True) # currently, useless columns
     matched.dropna  (axis=1, how='all', inplace=True) # with NA only 
     ## merge csv with corresponding elements from global metadata (note that these are just intersection with csv)
-    csv = df_merge_metadata_by_index (csv, matched) 
+    csv = common.df_merge_metadata_by_index (csv, matched) 
     # replace receive leaf names in case it's NORW-E996C 
     csv["peroba_seq_uid"] = csv["peroba_seq_uid"].fillna(csv.index.to_series())
     csv["sequence_name"] = csv["sequence_name"].fillna(csv.index.to_series())
@@ -115,7 +118,7 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
     csv.reset_index (drop=False, inplace=True) ## drop=True means drop index completely, not even becomes a column
     csv.set_index (metadata.index.names, drop = True, inplace = True) # drop to avoid an extra 'peroba_seq_uid' column
     # merge with COGUK 
-    csv = df_merge_metadata_by_index (csv, metadata) 
+    csv = common.df_merge_metadata_by_index (csv, metadata) 
     csv['days_since_Dec19'] = csv['collection_date'].map(lambda a: get_days_since_2019(a, impute = True))
     csv["collection_date"] = pd.to_datetime(csv["collection_date"], infer_datetime_format=False, errors='coerce')
 
@@ -144,7 +147,7 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
         logger.warning("  phylogenetic analysis, one copy from the NORW database and one from COGUK. I will keep only one of each, at random")
         logger.warning("  some examples (whenever counter>1): %s", str(collections.Counter(leaf_list).most_common(20)))
 
-    metadata0 = df_merge_metadata_by_index (csv, metadata0) 
+    metadata0 = common.df_merge_metadata_by_index (csv, metadata0) 
     metadata0["collection_date"] = pd.to_datetime(metadata0["collection_date"], infer_datetime_format=False, errors='coerce')
     return metadata0, csv, tree, tree_leaves
 
@@ -238,9 +241,9 @@ def main():
     else: title_date = datetime.datetime.now().strftime("%Y-%m-%d") 
 
     logger.info("Reading metadata (previously prepared by peroba)")
-    metadata = df_read_genome_metadata (args.metadata, index_name = "peroba_seq_uid")
+    metadata = common.df_read_genome_metadata (args.metadata, index_name = "peroba_seq_uid")
     logger.info("Reading CSV file with metadata from NORW")
-    csv = df_read_genome_metadata (args.csv, index_name = "central_sample_id")
+    csv = common.df_read_genome_metadata (args.csv, index_name = "central_sample_id")
     logger.info("Reading tree file and checking if there are duplicate names")
     treestring = open(args.tree).readline().rstrip().replace("\'","").replace("\"","").replace("[&R]","")
     tree = ete3.Tree(treestring)

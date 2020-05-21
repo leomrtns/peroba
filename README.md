@@ -6,9 +6,16 @@ __Leonardo de Oliveira Martins<sup>1</sup>__
 
 ## Introduction
 **peroba** is a tool for continuous updating of outbreak information as new sequences are
-incorporated.
+incorporated. 
+It is been developed as a phylogenetic tracking tool to aggregate samples sequenced at the QIB 
+with global information from [COG-UK](https://www.cogconsortium.uk/) and [GISAID](https://www.gisaid.org/). 
+Therefore you will not find any data here, although [all COG-UK data are available
+online](https://www.cogconsortium.uk/data/).
+
 **peroba** is the name of a Brazilian timber tree, but if you like acronyms it stands 
 for Phylogenetic Epidemiology with ROBust Assignment. 
+
+
 
 ## License 
 SPDX-License-Identifier: GPL-3.0-or-later

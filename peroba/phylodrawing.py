@@ -143,8 +143,6 @@ def colormap_from_dataframe (df, column_list, column_names, cmap_list = None):
                 d_seq_lab[seq].append(str(" "))
     return [d_seq, d_seq_lab, d_col, column_names] 
 
-
-
 def return_treestyle_with_columns (cmapvector):
     '''
     Need column names again to print header in order 
@@ -203,12 +201,14 @@ def ASR_subtrees (metadata0, tree, csv_cols = None, reroot = True, method = None
     *or* was sequenced here in NORW.
     One column at a time, so the n_threads doesn't help.
     """
-    if method is None: method = ["DOWNPASS", "DOWNPASS"]
+    if method is None: method = ["DOWNPASS", "ACCTRAN"]
     if isinstance (method, str): method = [method, method]
     if csv_cols is None: 
-        csv_cols = ["adm2", "submission_org_code", "date_sequenced", "source_age", "source_sex", "collecting_org", "ICU_admission"]
+        #csv_cols = ["adm2", "uk_lineage", "lineage", "phylotype", "submission_org_code", "date_sequenced", "source_age", "source_sex", "collecting_org", "ICU_admission"]
+        csv_cols = ["uk_lineage", "lineage", "phylotype", "special_lineage", "submission_org_code"]
 
     metadata = metadata0.copy()  # work with copies
+    metadata["uk_lineage"] = metadata["uk_lineage"].replace("x", np.nan, regex=True)  ## old database (before 05.22) made this silly substitution
     csv_cols = [x for x in csv_cols if x in metadata.columns]
     #tree = tree0.copy("deepcopy")
 #    tree = tree0
@@ -228,24 +228,25 @@ Sequence clusters are based on "locality": patients from Norfolk (field `adm2`) 
     logger.info("Finished estimating ancestral state for 'locality', which defines clusters")
     
     ## decorate the tree with ancestral states
-    csv, csv_cols = prepare_csv_columns_for_asr (metadata)
+    csv, csv_cols = prepare_csv_columns_for_asr (metadata, csv_cols)
     if (csv_cols):
         logger.info("Will now estimate ancestral states for %s", " ".join(csv_cols))
         tree_leaf_nodes = {leaf:leaf.name for leaf in tree.iter_leaves()} # in case we have duplicated names 
         result = acr (tree, csv, prediction_method = method[1], force_joint=False) ## annotates tree nodes with states (e.g. tre2.adm2)
         for leafnode, leafname  in tree_leaf_nodes.items(): # pastml (correctly) replaces duplicated names by a placeholder like "t123" 
             leafnode.name = leafname  # reverts back to duplicate names 
+    metadata = save_metadata_inferred (metadata, tree, csv_cols)
 
     node2leaves = tree.get_cached_content(store_attr="name") # dict node:[leaves]
     submetadata = [metadata.loc[metadata.index.isin(node2leaves[x])] for x in subtree]
     # not currently used
     supermetadata = [metadata.loc[metadata.index.isin(node2leaves[x.up])] for x in subtree if x.up]
 
-    return submetadata, subtree, md_description
+    return submetadata, subtree, md_description, metadata  ## metadata now has tip reconstruction
 
 def prepare_csv_columns_for_asr (csv, csv_cols=None):
     if csv_cols is None: 
-        csv_cols = ["adm2", "Postcode", "submission_org_code", "date_sequenced",
+        csv_cols = ["adm2", "uk_lineage", "lineage",  "Postcode", "submission_org_code", "date_sequenced",
                 "source_age", "source_sex", "collecting_org", "ICU_admission", "PCR Ct value", "Repeat Sample ID"]
     csv_cols = [x for x in csv_cols if x in csv.columns]
     if csv_cols:
@@ -257,7 +258,7 @@ def prepare_csv_columns_for_asr (csv, csv_cols=None):
 
     csv_cols = [x for x in csv_cols if x in csv.columns]
     for col in csv_cols:
-        csv[col].fillna("nil", inplace=True) ## prevents estimating tip values
+        csv[col].fillna("", inplace=True) ## prevents estimating tip values
         csv[col] = csv[col].astype(str)
 
     logger.info ("Follow-up columns found in CSV: %s", " ".join(csv_cols))
@@ -278,4 +279,13 @@ def plot_single_cluster (csv, tree, counter, ts = None, output_dir=None):
     # report_md += "<hr>\n"
 
     return md_description
+
+def save_metadata_inferred (df, tree, csv_cols):  ## QUICK AND DIRTY
+    for leaf in tree.iter_leaves():
+        for col in csv_cols:
+            if pd.isnull(df.loc[str(leaf.name), col]): ## just impute if it was nan
+                x = getattr(leaf,col)
+                df.loc[str(leaf.name), col] = "|".join([str(i) for i in x]) + "_i"
+    df.to_csv ("inferred.csv.gz")
+    return df
 
