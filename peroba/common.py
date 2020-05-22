@@ -26,6 +26,9 @@ suffix = {
         "sequences": ".sequences.fasta.bz2",
         "alignment": ".sequences.aln.bz2"
         }
+        
+#asr_cols = ["adm2", "uk_lineage", "lineage", "phylotype", "submission_org_code", "date_sequenced", "source_age", "source_sex", "collecting_org", "ICU_admission"]
+asr_cols = ["adm2", "uk_lineage", "lineage", "phylotype", "special_lineage", "adm2_private"]
 
 def read_ete_treefile (treefile, multi = None):
     if multi is None: 
@@ -122,6 +125,7 @@ def df_read_genome_metadata (filename, primary_key = "sequence_name", rename_dic
     else:
         df1.set_index (str(index_name), drop = True, inplace = True) # drop the column to avoid having both with same name
 
+    df1['adm2'] = df1['adm2'].str.title()
     df1 = df1.groupby(df1.index).aggregate("first"); # duplicated indices are allowed in pandas
     return df1
 

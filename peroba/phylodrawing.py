@@ -10,6 +10,8 @@ from sklearn import manifold, metrics, cluster, neighbors, decomposition, prepro
 #import skbio, parasail, dendropy, datetime, time, codecs, joypy
 import sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib
 
+import common
+
 logger = logging.getLogger(__name__) 
 logger.propagate = False ## otherwise it duplicates (own stream and generic stream)
 stream_log = logging.StreamHandler()
@@ -196,30 +198,30 @@ def return_treestyle_with_columns (cmapvector):
         ts.aligned_header.add_face(labelFace, col)
     return ts
 
-def ASR_subtrees (metadata0, tree, csv_cols = None, reroot = True, method = None):
+def ASR_subtrees (metadata0, tree, reroot = True, method = None):
     """ ancestral state reconstruction assuming binary or not. Clusters are based on "locality": patient is from Norfolk
     *or* was sequenced here in NORW.
     One column at a time, so the n_threads doesn't help.
     """
     if method is None: method = ["DOWNPASS", "ACCTRAN"]
     if isinstance (method, str): method = [method, method]
-    if csv_cols is None: 
-        #csv_cols = ["adm2", "uk_lineage", "lineage", "phylotype", "submission_org_code", "date_sequenced", "source_age", "source_sex", "collecting_org", "ICU_admission"]
-        csv_cols = ["uk_lineage", "lineage", "phylotype", "special_lineage", "submission_org_code"]
 
     metadata = metadata0.copy()  # work with copies
     metadata["uk_lineage"] = metadata["uk_lineage"].replace("x", np.nan, regex=True)  ## old database (before 05.22) made this silly substitution
-    csv_cols = [x for x in csv_cols if x in metadata.columns]
-    #tree = tree0.copy("deepcopy")
-#    tree = tree0
+    csv_cols = [x for x in common.asr_cols if x in metadata.columns]
     if reroot: ## this should be A,B 
         R = tree.get_midpoint_outgroup()
         tree.set_outgroup(R)
 
     md_description="""
-Sequence clusters are based on "locality": patients from Norfolk (field `adm2`) *or* patients that were sequenced here
-(submission org = `NORW`). <br>
+Sequence clusters are based on **locality**: patients from Norfolk (field `adm2`) *or* patients that were sequenced here
+(submission org = `NORW`).
+This definition is not equivalent to the `UK lineages`, which relies on sequence properties and is estimated at the
+national level. 
+The **locality** allows us to focus on the local scale, by "zooming in" into connected lineages.
+<br>
     """
+    logger.info("Start estimating ancestral states by %s for locality and %s for others", method[0], method[1])
     ## subtrees will be defined by 'locality'
     yesno = (metadata["adm2"].str.contains("Norfolk", case=False)) | (metadata["submission_org_code"].str.contains("NORW", case=False))
     df = pd.DataFrame(yesno.astype(str), columns=["local"], index=metadata.index.copy())
@@ -245,20 +247,17 @@ Sequence clusters are based on "locality": patients from Norfolk (field `adm2`) 
     return submetadata, subtree, md_description, metadata  ## metadata now has tip reconstruction
 
 def prepare_csv_columns_for_asr (csv, csv_cols=None):
-    if csv_cols is None: 
-        csv_cols = ["adm2", "uk_lineage", "lineage",  "Postcode", "submission_org_code", "date_sequenced",
-                "source_age", "source_sex", "collecting_org", "ICU_admission", "PCR Ct value", "Repeat Sample ID"]
+    if csv_cols is None:  csv_cols = common.asr_cols # csv_cols = estimate tips, add "peroba_" to name and export
     csv_cols = [x for x in csv_cols if x in csv.columns]
-    if csv_cols:
-        csv = csv[csv_cols];
-        if "submission_org_code" in csv_cols:
-            csv.loc[~csv["submission_org_code"].str.contains("NORW", na=False), "date_sequenced"] = "nil" # only for NORW
-        if "ICU_admission" in csv_cols:
-            csv["ICU_admission"] = csv["ICU_admission"].replace("Unknown", "nil", regex=True)
+    csv = csv[csv_cols + ["submission_org_code"]]; ## dataframe csv will also have submission_org_code column (for tree colouring)
+    if "ICU_admission" in csv_cols:
+        csv["ICU_admission"] = csv["ICU_admission"].replace("Unknown", "", regex=True)
+
+    csv.loc[~csv["submission_org_code"].str.contains("NORW", na=False), "date_sequenced"] = "nil" # only for NORW
 
     csv_cols = [x for x in csv_cols if x in csv.columns]
     for col in csv_cols:
-        csv[col].fillna("", inplace=True) ## prevents estimating tip values
+        csv[col].fillna("", inplace=True) ## to estimate tip values
         csv[col] = csv[col].astype(str)
 
     logger.info ("Follow-up columns found in CSV: %s", " ".join(csv_cols))
@@ -268,6 +267,7 @@ def plot_single_cluster (csv, tree, counter, ts = None, output_dir=None):
     if output_dir is None: output_dir = cwd
     exclude=["Postcode","Repeat Sample ID", "acc_lineage", "submission_org_code", "subsample_omit","swab_site","title","url","virus"]
     exclude = [x for x in csv.columns if x in exclude]
+
     fname = f"tree{counter}.pdf"
     md_description = ""
     df = csv.drop (labels = exclude, axis=1)
@@ -280,12 +280,18 @@ def plot_single_cluster (csv, tree, counter, ts = None, output_dir=None):
 
     return md_description
 
-def save_metadata_inferred (df, tree, csv_cols):  ## QUICK AND DIRTY
+def save_metadata_inferred (df, tree, csv_cols = None):
+    ## write only a copy of the original column, since here we also mix imputed values
+    if csv_cols is None: csv_cols = common.asr_cols
+    prefix = "peroba_"
+    for col in csv_cols:
+        df[prefix+col] = "" # create new columns 
+
     for leaf in tree.iter_leaves():
         for col in csv_cols:
-            if pd.isnull(df.loc[str(leaf.name), col]): ## just impute if it was nan
-                x = getattr(leaf,col)
-                df.loc[str(leaf.name), col] = "|".join([str(i) for i in x]) + "_i"
-    df.to_csv ("inferred.csv.gz")
+            x = getattr(leaf,col)
+            df.loc[str(leaf.name), prefix+col] = "/".join([str(i) for i in x])
+#            if pd.isnull(df.loc[str(leaf.name), col]): ## just impute if it was nan
+#                df.loc[str(leaf.name), col] = "/".join([str(i) for i in x]) # this is original column
     return df
 

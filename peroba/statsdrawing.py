@@ -21,12 +21,13 @@ seaborn_rc = {"figure.dpi":300, "font.size":8, "axes.titlesize":8,"axes.labelsiz
 
 def generate_time_heatmap (df0, date_col = None, group_col = None, use_max = True, label_interval = None):
     if date_col is None: date_col = "collection_date"
-    if group_col is None: group_col = "adm2"
+    if group_col is None: group_col = "peroba_uk_lineage"
     if label_interval is None: label_interval = 7 #  once every week
-    df = df0
-    df["date"] = pd.to_datetime(df["collection_date"], infer_datetime_format=False, errors='coerce')
+    df = df0.copy()
+    df["group"] = df[group_col].str.split('/').str[0]
+    df["date"] = pd.to_datetime(df[date_col], infer_datetime_format=False, errors='coerce')
     ## see also df.pivot(a,b,c) which takes df with cols a,b,c and create axb matrix with c values
-    df = df.groupby(["date","adm2"]).size().unstack() ## real one will use cluster_id, not adm 
+    df = df.groupby(["date","group"]).size().unstack() ## real one will use cluster_id, not adm 
 
     idx = pd.date_range(df.index.min(),df.index.max(), freq="1D") # creates uniform interval
     df.fillna(0,inplace=True) ## otherwise nan is treated differently
@@ -36,17 +37,48 @@ def generate_time_heatmap (df0, date_col = None, group_col = None, use_max = Tru
     recent = {}
     if use_max: # sort by most recent case
         for column in df.columns:
-            res = max (((df.index - df.index.values.min())/peroba.np.timedelta64(1, 'D')).astype(int) * (df[column].astype(peroba.np.int64())>0))
+            res = max (((df.index - df.index.values.min())/np.timedelta64(1, 'D')).astype(int) * (df[column].astype(np.int64())>0))
             recent[column] = res
     else: # sort by weighted average of dates (weights are number of cases)
         for column in df.columns:
-            x = ((df.index - df.index.values.min())/peroba.np.timedelta64(1, 'D')).astype(int)
-            res = sum(x * df[column].astype(peroba.np.int64()))/sum(df[column].astype(peroba.np.int64()))
+            x = ((df.index - df.index.values.min())/np.timedelta64(1, 'D')).astype(int)
+            res = sum(x * df[column].astype(np.int64()))/sum(df[column].astype(np.int64()))
             recent[column] = res
 
     reclist = [k for k, v in sorted(recent.items(), key=lambda item: item[1], reverse=True)]
     labs = ["" if i%label_interval else a for i,a in enumerate(df.index.strftime('%Y-%m-%d'))]
     return df[reclist], labs
+
+def plot_time_heatmap (metadata, counter, output_dir):
+    fname = f"heat{counter}.pdf"
+    df2, labs = generate_time_heatmap (metadata)
+    df2 = df2.T ## transpose rows and cols
+    ratio = df2.shape[0]/df2.shape[1]
+    if ratio > 4: ratio = 4
+    if ratio < 0.25: ratio = 0.25
+    #plt.figure(figsize=(dyn_width,dyn_height)); 
+    plt.figure(figsize=(8, ratio * 8)); 
+    sns.set(font_scale=1); sns.set_context("paper", rc=seaborn_rc);
+    sns.set_palette("cubehelix", 8)
+    g = sns.heatmap( df2, mask=df2.isnull(), square=False, cmap= 'Blues', linewidth=0.5, 
+            cbar_kws={'fraction' : 0.005, "ticks":[0,df2.values.max()]})# fraction= shrink colorbar size, ticks=text,
+    # alternatives to labs[] above: to make seaborn decide number of tick labels
+    #x = g.set_xticklabels(df.index.strftime('%Y-%m-%d')) 
+    #  or, to have one tick per week: (strftime above can be removed but then seaborn may decide to drop some)
+    #x = g.get_xticklabels()
+    #for i, lab in enumerate(x):
+    #    if i%7:
+    #        lab.set_text("")
+    #    else:
+    #        lab.set_text(lab.get_text()[:10])
+    #x = g.get_yticklabels()
+    #for i, lab in enumerate(x):
+    #        lab.set_text(lab.get_text()[:16])
+    x = g.set_xticklabels (labs, rotation=30, horizontalalignment='right', fontweight='light') ## x is to avoid printing
+    md_description = f"\n![heat{counter}]({fname})\n<br>\n"
+    g.figure.savefig(os.path.join(output_dir,fname), format="pdf")  # or plt.savefig()
+    g.figure.clf()
+    return md_description
 
 def new_date_column_with_jitter (df0, original_date_col = None, new_date_col = None, label_interval = None):
     """ this function can be merged with above? or we can recalc here the column order, using most recent dates:
@@ -58,28 +90,13 @@ def new_date_column_with_jitter (df0, original_date_col = None, new_date_col = N
     if label_interval is None: label_interval = 7 #  once every week
     tmp_col = new_date_col + "TMP"
     df[tmp_col] = pd.to_datetime(df0[original_date_col], infer_datetime_format=False, errors='coerce')
-    df[new_date_col] = ((df[tmp_col] - df[tmp_col].min())/peroba.np.timedelta64(1, 'D')).astype(float) +  np.random.uniform(-0.35,0.35, len(df[tmp_col]))
+    df[new_date_col] = ((df[tmp_col] - df[tmp_col].min())/np.timedelta64(1, 'D')).astype(float) +  np.random.uniform(-0.35,0.35, len(df[tmp_col]))
     # below is WRONG since the x-axis does NOT follow table order!
     labs = ["" if i%label_interval else a for i,a in enumerate(df[tmp_col].dt.strftime('%Y-%m-%d'))] # notice the "dt"to convert
     return df[new_date_col], labs
 
-## plot the heatmap with 
-# df2 = df2.T ## transpose rows and cols
-#g = sns.heatmap( df2, mask=df2.isnull(), square=False, cmap= 'Blues', linewidth=0.5
-#    cbar_kws={'fraction' : 0.005, "ticks":[0,df.values.max()]})# fraction= shrink colorbar size, ticks=text,
-## alternatives to labs[] above: to make seaborn decide number of tick labels
-#x = g.set_xticklabels(df.index.strftime('%Y-%m-%d')) 
-##  or, to have one tick per week: (strftime above can be removed but then seaborn may decide to drop some)
-#x = g.get_xticklabels()
-#for i, lab in enumerate(x):
-#    if i%7:
-#        lab.set_text("")
-#    else:
-#        lab.set_text(lab.get_text()[:10])
-#x = g.set_xticklabels (x, rotation=30, horizontalalignment='right', fontweight='light')
-
 ## plot using the jitter (Although not reordered, can use order from heatmap...)
-# g = peroba.sns.stripplot(y="lineage", x="date_float", edgecolor="black", jitter=0.3, linewidth=0.1, marker="o", alpha=0.8, s=2, data=df2)
+# g = sns.stripplot(y="lineage", x="date_float", edgecolor="black", jitter=0.3, linewidth=0.1, marker="o", alpha=0.8, s=2, data=df2)
 
 def plot_genomes_sequenced_over_time (metadata, output_dir):
     df = metadata.copy() 
@@ -105,7 +122,9 @@ def plot_genomes_sequenced_over_time (metadata, output_dir):
     
     md_description = """
 ## Genomes sequenced at the QIB considered here PLEASE DO NOT USE 
-These counts are **not** the total sums, they are based on the merged database (which remove data without sequence etc.)
+These counts may **not** be the total sums, they are based on a merged database that removes duplicates (some samples
+were lost?) 
+And this is still work-in-progress
 """
     md_description += "\n<br>![](genomes_over_time.pdf)\n<br>\n" # same directory as report.md, it doesn't need full path? 
     fname = os.path.join(output_dir,"genomes_over_time.pdf")
@@ -121,7 +140,7 @@ def plot_jitter_lineages (metadata, output_dir=None):
     
     plt.figure(figsize=(10,6)); sns.set(); sns.set_context("paper", rc=seaborn_rc);
     #df2["date"].strftime('%Y-%m-%d')
-    g = sns.stripplot (y="lineage", x="date_float", edgecolor="black", jitter=0.3, linewidth=0.1, marker="o", alpha=0.8, s=2, data=df)
+    g = sns.stripplot (y="peroba_lineage", x="date_float", edgecolor="black", jitter=0.3, linewidth=0.1, marker="o", alpha=0.8, s=2, data=df)
     #x = g.set_xticklabels(df2["date"].dt.strftime('%Y-%m-%d'))  ## order in table is NOT PLOT ORDER!
     #x = g.get_xticklabels ()
     #for lab in x:
@@ -131,7 +150,7 @@ def plot_jitter_lineages (metadata, output_dir=None):
     ## see also https://www.machinelearningplus.com/plots/top-50-matplotlib-visualizations-the-master-plots-python/
     md_description = """
 ## PLEASE DO NOT USE 
-the days are a float number 
+
 """
     md_description += "\n<br>![](jitter_lineages.pdf)\n<br>\n" # same directory as report.md, it doesn't need full path? 
     fname = os.path.join(output_dir,"jitter_lineages.pdf")
@@ -144,10 +163,14 @@ def plot_bubble_per_cluster (metadata, counter, output_dir):
     df=metadata.copy()
     df = df.groupby(["collection_datetime","adm2"]).size().to_frame(name="size")
     df = df.reset_index() # collection and adm2 are indices of series (that we transformed into frame)
-
-    plt.figure(figsize=(12,4)); sns.set(font_scale=1); sns.set_context("paper", rc=seaborn_rc);
+    ratio = len(df["adm2"].unique())/len(df["collection_datetime"].unique())
+    if ratio > 4: ratio = 4
+    if ratio < 0.25: ratio = 0.25
+    #plt.figure(figsize=(dyn_width,dyn_height)); 
+    plt.figure(figsize=(8, ratio * 8)); 
+    sns.set(font_scale=1); sns.set_context("paper", rc=seaborn_rc);
     sns.set_palette("cubehelix", 8)
-    g = sns.scatterplot(y="adm2", x="collection_datetime", size="size", edgecolor="white", alpha=0.8, s=40, data=df)
+    g = sns.scatterplot(y="adm2", x="collection_datetime", size="size", sizes=(30,150), edgecolor="white", alpha=0.7, data=df)
     #g.set_xticklabels(g.get_xticklabels(), rotation=45, horizontalalignment='right') # nt working
     plt.xticks(rotation=30, horizontalalignment='right') # alternative to loop above (pyplot only)
 

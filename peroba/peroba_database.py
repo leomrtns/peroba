@@ -32,13 +32,17 @@ class PerobaDatabase:
     databases are updated (COGUK and GISAID). 
     """
     metadata = None
-    tree     = None
+    raw = None  ## also metadata, but with _all_ rows, even duplicates or missing sequences
+    tree = None
+    no_pruning = True
     tree_leaves = None    # dictionary with {name:node}
     sequences = None      # dictionary with sename:SeqRecord(); peroba.utils and other lowlevel use a lot of lists of SeqRecord()
     prefix = None
 
-    def __init__ (self, tree, metadata, sequence, prefix): 
+    def __init__ (self, tree, metadata, sequence, prefix, pruning = False): 
         self.prefix = prefix
+        if pruning is True: self.no_pruning = False 
+        else: self.no_pruning = True
         logger.info(f"Starting database \'{prefix}\'")
         if (len(tree)):     self.add_treefile (tree)
         if (len(metadata)): self.add_metadata (metadata)
@@ -54,6 +58,13 @@ class PerobaDatabase:
             fname = self.prefix + common.suffix["metadata"]
             logger.info(f"Saving metadata to file {fname}")
             self.metadata.to_csv (fname)
+        else:
+            logger.warning("Metadata missing: this won't be a valid database")
+
+        if self.raw is not None: 
+            fname = self.prefix + common.suffix["raw"]
+            logger.info(f"Saving raw (metadata) table to file {fname}")
+            self.raw.to_csv (fname)
         else:
             logger.warning("Metadata missing: this won't be a valid database")
 
@@ -96,8 +107,9 @@ class PerobaDatabase:
             else: df1 = common.df_merge_metadata_by_index (df1, df2) 
         df1 = common.df_finalise_metadata (df1)
         self.metadata = df1
+        self.raw = df1.copy() ## not merged with sequence
         logger.info("Finished reading metadata files. Merged dataframe has shape %s (rows x cols)", str(self.metadata.shape))
-
+        
         self.merge_data_tree ()
         self.merge_data_sequence ()
 
@@ -137,8 +149,7 @@ class PerobaDatabase:
         self.add_sequence_counts_to_metadata (from_scratch = False) ## add column if missing 
 
     def merge_sequence_tree (self): # keep only intersection
-        if self.tree is None or self.sequences is None:
-            return
+        if self.no_pruning or self.tree is None or self.sequences is None: return
         id_seqs = [x for x in self.sequences.keys()]   # copy needed since we may delete elements 
         id_tree = [x for x in self.tree_leaves.keys()] # copy needed since I'll delete elements (modifying dict)
         ## remove leaves without a sequence
@@ -152,7 +163,7 @@ class PerobaDatabase:
         logger.debug("SeqTree:: Tree will not be used to remove sequences")
 
     def merge_data_tree (self): # keep only intersection
-        if self.tree is None or self.metadata is None: return
+        if self.no_pruning or self.tree is None or self.metadata is None: return
         ## remove leaves not in metadata
         id_meta = self.metadata.index.array # <PandasArray> object, works like an np.array
         id_tree = [x for x in self.tree_leaves.keys()]   # copy needed since I'll delete elements (modifying dict)
@@ -201,6 +212,8 @@ class PerobaDatabase:
             nilvalues = self.metadata[self.metadata["peroba_freq_acgt"].isnull()].index.map(lambda x: calc_freq_ACGT (x))  
             if len(nilvalues) > 0:
                 self.metadata[self.metadata["peroba_freq_acgt"].isnull()] = nilvalues 
+
+        self.raw = self.raw.combine_first (self.metadata[["peroba_freq_n", "peroba_freq_acgt"]]) ## add columns by index
         
 class ParserWithErrorHelp(argparse.ArgumentParser):
     def error(self, message):
@@ -229,16 +242,18 @@ def main():
     usage='''peroba_database [options] ''')
 
     parser.add_argument('-d', '--debug', action="store_const", dest="loglevel", const=logging.DEBUG, default=logging.WARNING,
-            help="Print debugging statements")
+        help="Print debugging statements")
     parser.add_argument('-v', '--verbose', action="store_const", dest="loglevel", const=logging.INFO, help="Add verbosity")
 #    parser.add_argument('-m', '--metadata', metavar='csv', type=argparse.FileType('r'), ## this opens the file !
     parser.add_argument('-m', '--metadata', metavar='csv', nargs='+', required=True, 
-            help="csv/tsv files with metadata information (from COGUK or GISAID)")
+        help="csv/tsv files with metadata information (from COGUK or GISAID)")
     parser.add_argument('-t', '--tree', metavar='treefile', required=True,  help="single treefile in newick format")
     parser.add_argument('-s', '--fasta', metavar='fas', nargs='+', required=True, 
-            help="fasta files with unaligned genomes from COGUK, GISAID")
+        help="fasta files with unaligned genomes from COGUK, GISAID")
     parser.add_argument('-i', '--input', action="store", help="Directory where input files are. Default: working directory")
     parser.add_argument('-o', '--output', action="store", help="Output database directory. Default: working directory")
+    parser.add_argument('-f', '--force-pruning', dest = "force", default=False, action='store_true', 
+        help="Prune tree, removing leaves absent from metadata and sequences. Slow, few benefits?")
 
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel)
@@ -256,7 +271,7 @@ def main():
     meta = fill_file_location (args.metadata, input_d)
     fasta = fill_file_location (args.fasta, input_d)
 
-    prb_db = PerobaDatabase (tree = tree, metadata = meta, sequence = fasta, prefix = prefix) 
+    prb_db = PerobaDatabase (tree = tree, metadata = meta, sequence = fasta, prefix = prefix, pruning = args.force) 
     prb_db.save_to_db_files () 
 
 if __name__ == '__main__':

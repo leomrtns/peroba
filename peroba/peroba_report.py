@@ -29,8 +29,8 @@ def plot_over_clusters (csv, tree, min_cluster_size = None, output_dir=None):
     if output_dir is None: output_dir = cwd
     if min_cluster_size is None: min_cluster_size = 2
     df = csv.copy()
-    clist = ["adm2", "lineage", "uk_lineage", "collection_datetime"]
-    cname = ["Administration", "Lineages", "UK lineage", "Date"]
+    clist = ["adm2", "peroba_lineage", "peroba_uk_lineage"]
+    cname = ["Administration", "Lineages", "UK lineage"]
 
     md_description = """
 ## Phylogenetic clusters\n
@@ -40,17 +40,17 @@ Only clusters with more than {minc_size} elements are shown.
     sub_csv, sub_tree, this_description, csv = phylo.ASR_subtrees (csv, tree)
     md_description += this_description
 
-    colmap_dict = phylo.colormap_from_dataframe (csv, column_list = clist, column_names=cname) # csv may have ASR inferred
-    #colmap_dict = phylo.colormap_from_dataframe (df, column_list = clist, column_names=cname)
+    colmap_dict = phylo.colormap_from_dataframe (csv, column_list = clist, column_names=cname)
     ts = phylo.return_treestyle_with_columns (colmap_dict)
 
     for i,(c,t) in enumerate(zip(sub_csv,sub_tree)):
         if len(c) > min_cluster_size:
-            print (c["lineage"])
             md_description += f"\n### Cluster {i}\n"
             this_description = phylo.plot_single_cluster (c, t, i, ts, output_dir)
             md_description += this_description
             this_description = stdraw.plot_bubble_per_cluster (c, i, output_dir)
+            md_description += this_description
+            this_description = stdraw.plot_time_heatmap (c, i, output_dir)
             md_description += this_description
 
     md_description += """
@@ -58,12 +58,11 @@ Only clusters with more than {minc_size} elements are shown.
 The complete phylogenetic tree is displayed in a separate document due to its large size.<br>
 
 \n<br>(report generated at {today})<br>
-This is a **temporary draft** and the numbers have **not** been checked. 
-Software still under development.<br>
+This is a **draft**. Software still under development.<br>
 """.format(today=datetime.datetime.now().strftime("%Y-%m-%d %H:%M")) 
     tree.render(os.path.join(output_dir,"full_tree.pdf"), w=1200, tree_style=ts)
 
-    return md_description 
+    return md_description, csv 
 
 def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
     """
@@ -138,6 +137,7 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
             del tree_leaves[i]
         tree.prune([node for node in tree_leaves.values()], preserve_branch_length=True) # or leafnames, but fails on duplicates
 
+    logger.info("Comparing tree leaves to check for duplicates")
     leaf_list = [leaf.name for leaf in tree.iter_leaves()] # may have duplicates
     tree_length = len(leaf_list)
     tree_leaves = {str(leaf.name):leaf for leaf in tree.iter_leaves()} # dup leaves will simply overwrite node information
@@ -147,13 +147,23 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
         logger.warning("  phylogenetic analysis, one copy from the NORW database and one from COGUK. I will keep only one of each, at random")
         logger.warning("  some examples (whenever counter>1): %s", str(collections.Counter(leaf_list).most_common(20)))
 
+    logger.info("Merging metadata files by sequence name, after renaming local sequences when possible")
     metadata0 = common.df_merge_metadata_by_index (csv, metadata0) 
     metadata0["collection_date"] = pd.to_datetime(metadata0["collection_date"], infer_datetime_format=False, errors='coerce')
     return metadata0, csv, tree, tree_leaves
 
+def merge_original_with_extra_cols (csv_original, metadata):
+    cols = [x for x in metadata.columns if x.startswith("peroba")] 
+    cols += ["central_sample_id"]
+    df =  metadata[cols]
+    df = df.merge(csv_original, on="central_sample_id")
+    return df  ## no csv_original were harmed in this function
+
 def prepare_report_files (metadata, csv, tree, tree_leaves, input_dir, output_dir, title_date):
     mkd_file_name = os.path.join(output_dir,f"report_{title_date}.md")
     pdf_file_name = os.path.join(output_dir,f"report_{title_date}.pdf")
+    csv_file_name = os.path.join(output_dir,f"csv_{title_date}.csv.gz")
+    meta_file_name = os.path.join(output_dir,f"metadata_{title_date}.csv.gz")
     titlepage_name = os.path.join(input_dir,"titlepage-fig.pdf")
     pagebackground_name = os.path.join(input_dir,"letterhead-fig.pdf")
     pandoc_template_name = os.path.join(input_dir,"eisvogel")
@@ -189,9 +199,15 @@ geometry:
     report_fw.write(md_description)
 
     ## prepare data (merging, renaming)
+    csv_original = csv.copy()
     metadata, csv, tree, tree_leaves = merge_metadata_with_csv (metadata, csv, tree, tree_leaves)
     ## start plotting 
-    md_description = plot_over_clusters (csv, tree, min_cluster_size = 2, output_dir=output_dir)
+    md_description, csv = plot_over_clusters (csv, tree, min_cluster_size = 4, output_dir=output_dir)
+    metadata = phylo.save_metadata_inferred (metadata, tree)
+    csv = merge_original_with_extra_cols (csv_original, metadata)
+    csv.to_csv (csv_file_name)
+    metadata.to_csv (meta_file_name)
+
     report_fw.write(md_description)
     md_description = stdraw.plot_jitter_lineages (metadata, output_dir)
     report_fw.write(md_description)
