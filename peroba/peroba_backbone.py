@@ -1,10 +1,11 @@
-import logging, ete3, argparse
+import logging, ete3, argparse, treeswift
 import matplotlib
-matplotlib.use('Agg') # first rule to prevent system of chosing X11-based
-import matplotlib.pyplot as plt
-from matplotlib import rcParams
+import pkg_resources 
+import numpy as np, pandas as pd
 
 from utils import *
+import common
+import regression as ml 
 
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False
@@ -16,172 +17,126 @@ logger.addHandler(stream_log)
 
 current_working_dir = os.getcwd()
 
-def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
-    """
-    Local (NORW) sequences are named NORW-EXXXX, which is central_sample_id. We match those to COGUK when possible
-    This adds all our local (stablished) sequences to the database, i.e. not only the ones to query
-    The priority column will have a value from 0 (sequence can be safely excluded) to 255 (sequence must remain);
-    therefore local sequences must start with at least 127
-    The class column is to distinguish NORW_SEQ and NORW_MISSING (if sequence is present or not). It may also be
-    NORW_QUERY, COGUK and GISAID
-    New metadata has `date_sequenced` and `Postcode` that are useful
-    """
-    ## local csv may contain info on rejected samples (e.g. as 2020.05.12 there are 
-    ## 452 rows but only 302 sequences, since 150 were not sequenced yet or QC rejected)
-    metadata = metadata0.copy() ## to make sure we don't modify global metadata 
-    csv = csv0.copy()
-    matched = metadata[ metadata["central_sample_id"].isin(csv.index) ] # index of csv is "central_sample_id"
-    csv["submission_org_code"] = "NORW"
-    csv["submission_org"] = "Norwich"
+class PerobaBackbone:
+    g_csv = None
+    g_seq = None # dictionary
+    l_csv = None
+    l_seq = None # dictionary 
+    trees = None ## these are treeswift trees
+    # subset of columns from that may be useful (drop others)
+    cols = ["sequence_name", "central_sample_id", "submission_org_code", "submission_org", "adm2",
+            "collection_date", "country" , "cov_id", "sequencing_org", "sequencing_org_code", "sequencing_submission_date",
+            "lineage", "lineage_support", "special_lineage","uk_lineage", "phylotype",
+            "peroba_freq_acgt", "peroba_freq_n", "peroba_seq_uid", "source_age", "source_sex", ## until here  from global, below is local
+            "adm2_private", "Repeat Sample ID", "icu_admission", "PCR Ct value", "No. Reads", "Mapped Reads", 
+            "No. Bases (Mb)", "Coverage (X)", "Average read length", "Basic QC", "High Quality QC", "Missing bases (N)",
+            "Consensus SNPs"] 
 
-    leaf_names = [x for x in tree_leaves.keys()] # some will be updated below to COGUK format, some are already in COGUK format
-    seqs_not_in_tree = dict()  ## NORW sequences that should be in tree but are not
-    # change leaf names whenever possible (i.e. they match to 'official' COGUK long names)
-    for shortname, longname  in zip(matched["central_sample_id"], matched["sequence_name"]):
-        if shortname in leaf_names:
-            tree_leaves[str(shortname)].name = longname # leaf names E9999 --> England/E9999/2020
-        else:
-            seqs_not_in_tree[str(shortname)] = longname
-    tree_leaves = {(leaf.name):leaf for leaf in tree.iter_leaves()} # dict {leaf_str_name: ete3_node}
-    leaf_names = set (leaf_names + [x for x in tree_leaves.keys()]) # update with new leaf names (from COGUK)
-#    norwseqnames = [x.id for x in seq_matrix]
-    if len(seqs_not_in_tree):
-        tbl_warning = [f"[WARNING]\t{x}\t{y}" for x,y in seqs_not_in_tree.items()]
-        logger.warning("Samples from NORW not found on tree (excluded from phylo analysis due to low quality perhaps?):\n%s", "\n".join(tbl_warning))
-
-    # remove csv rows not present in tree
-    csv = csv[ csv.index.isin(leaf_names) ]
-    logger.info("Number of NORW samples present in tree (according to CSV and global metadata): %s", len(csv))
-    ## temporarily use central_sample_id as index, so that we can merge_by_index
-    matched.reset_index(inplace=True) ## downgrades current index to a regular column
-    matched.set_index ("central_sample_id", append=False, drop = True, inplace = True) # append creates a new col w/ index 
-    # delete empty columns
-    csv.dropna      (axis=1, how='all', inplace=True) # currently, useless columns
-    matched.dropna  (axis=1, how='all', inplace=True) # with NA only 
-    ## merge csv with corresponding elements from global metadata (note that these are just intersection with csv)
-    csv = df_merge_metadata_by_index (csv, matched) 
-    # replace receive leaf names in case it's NORW-E996C 
-    csv["peroba_seq_uid"] = csv["peroba_seq_uid"].fillna(csv.index.to_series())
-    csv["sequence_name"] = csv["sequence_name"].fillna(csv.index.to_series())
-    #csv[metadata.index.names[0]] = csv[metadata.index.names[0]].fillna(csv.index.to_series()) # same as above
-
-    ## revert index to same as global metadata ("peroba_seq_uid" usually)
-    csv.reset_index (drop=False, inplace=True) ## drop=True means drop index completely, not even becomes a column
-    csv.set_index (metadata.index.names, drop = True, inplace = True) # drop to avoid an extra 'peroba_seq_uid' column
-    # merge with COGUK 
-    csv = df_merge_metadata_by_index (csv, metadata) 
-    csv['days_since_Dec19'] = csv['collection_date'].map(lambda a: get_days_since_2019(a, impute = True))
-    csv["collection_date"] = pd.to_datetime(csv["collection_date"], infer_datetime_format=False, errors='coerce')
-
-    # remove all rows not present in tree
-    csv = csv[ csv.index.isin(leaf_names) ]
-    # check if we have information about all leaves (o.w. we must prune the tree)
-    len_csv = len(csv)
-    len_tre = len(tree_leaves)
-    logger.info("Number tree leaves mapped to the metadata: %s", len_csv)
-    if len_csv < len_tre:
-        logger.warning("Number of leaves (%s) is higher than matched metadata (%s)",len_tre, len_csv)
-        id_meta = set(csv.index.array) # <PandasArray> object, works like an np.array
-        id_leaves = set([x for x in tree_leaves.keys()]) 
-        only_in_tree = list(id_leaves - id_meta)
-        logger.warning("Unmapped leaves:\n%s", "\n".join(only_in_tree))
-        for i in only_in_tree:
-            del tree_leaves[i]
-        tree.prune([node for node in tree_leaves.values()], preserve_branch_length=True) # or leafnames, but fails on duplicates
-
-    leaf_list = [leaf.name for leaf in tree.iter_leaves()] # may have duplicates
-    tree_length = len(leaf_list)
-    tree_leaves = {str(leaf.name):leaf for leaf in tree.iter_leaves()} # dup leaves will simply overwrite node information
-    if (tree_length > len(tree_leaves)):
-        tree.prune([node for node in tree_leaves.values()], preserve_branch_length=True) # or leafnames, but fails on duplicates
-        logger.warning("After mapping/merging, some leaves have same name -- e.g. if the same sequence was included twice in the")
-        logger.warning("  phylogenetic analysis, one copy from the NORW database and one from COGUK. I will keep only one of each, at random")
-        logger.warning("  some examples (whenever counter>1): %s", str(collections.Counter(leaf_list).most_common(20)))
-
-    metadata0 = df_merge_metadata_by_index (csv, metadata0) 
-    metadata0["collection_date"] = pd.to_datetime(metadata0["collection_date"], infer_datetime_format=False, errors='coerce')
-    return metadata0, csv, tree, tree_leaves
-
-def prepare_report_files (metadata, csv, tree, tree_leaves, input_dir, output_dir, title_date):
-    mkd_file_name = os.path.join(output_dir,f"report_{title_date}.md")
-    pdf_file_name = os.path.join(output_dir,f"report_{title_date}.pdf")
-    titlepage_name = os.path.join(input_dir,"titlepage-fig.pdf")
-    pagebackground_name = os.path.join(input_dir,"letterhead-fig.pdf")
-    pandoc_template_name = os.path.join(input_dir,"eisvogel")
+    def __init__ (self, peroba_db): # not split between global and local yet;
+        self.g_csv = peroba_db[0]  # formatted metadata
+        self.g_seq = {x.id:x for x in peroba_db[1]} # dictionary
+        self.trees = [peroba_db[2]]  ## trees is a list; peroba_db[2] is treeswift already (assuming no dup names)
+        cols = [x for x in self.cols if x in peroba_db[0].columns]
+        self.g_csv = self.g_csv[cols] # remove other columns
+        logger.info("Imported %s rows from database", str(self.g_csv.shape[0]))
     
-    md_description = """
----
-title: "Phylogenomic Report on SARS-CoV2 in Norfolk area"
-author: [Leonardo de Oliveira Martins]
-date: "{title_date}"
-keywords: [Markdown, SARS-CoV19]
-titlepage: true,
-titlepage-text-color: "FFFFFF"
-titlepage-rule-color: "360049"
-titlepage-rule-height: 0
-titlepage-background: {titlepage}
-page-background: {pagebackground}
-page-background-opacity: "1"
-fontsize: 11pt
-papersize: a4
-geometry:
-- top=35mm
-- bottom=30mm
-- left=15mm
-- right=15mm
-- heightrounded
-...
-# Report for {title_date}
-""".format(title_date = title_date, 
-            titlepage=tex_formattted_string(titlepage_name), # protects from YAML substitution 
-            pagebackground=tex_formattted_string(pagebackground_name))
+    def add_local_data_and_sequences (self, csv=None, sequence=None, replace = False):
+        if not sequence:
+            logger.warning("Nothing to merge without sequences")
+            self.split_data_sequences()
+            return
 
-    report_fw = open (mkd_file_name, "w")
-    report_fw.write(md_description)
+        name_dict = {x:y for x,y in zip(self.g_csv["central_sample_id"], self.g_csv["sequence_name"])}
+        seqs_in_global = [] # list of local unaligned sequences already in global
 
-    ## prepare data (merging, renaming)
-    metadata, csv, tree, tree_leaves = merge_metadata_with_csv (metadata, csv, tree, tree_leaves)
-    ## start plotting 
-    md_description = plot_over_clusters (csv, tree, min_cluster_size = 2, output_dir=output_dir)
-    report_fw.write(md_description)
-    md_description = stdraw.plot_jitter_lineages (metadata, output_dir)
-    report_fw.write(md_description)
-    md_description = stdraw.plot_genomes_sequenced_over_time (metadata, output_dir)
-    report_fw.write(md_description)
-    
-    report_fw.close()
+        logger.info("Updating sequence names if they are on global database")
+        s_short = []; s_long = []; s_new = [] ## all will store original seq name
+        for seq in sequence:
+            if seq.id not in self.g_csv.index: # seqname is not a global (long) name
+                if seq.id in name_dict.keys(): # sequence is present, but with short name
+                    s_short.append (seq.id) # appends short name, while seqs_in_global[] has long name
+                    seq.id = name_dict[seq.id] # receive coguk long name
+                    seqs_in_global.append (seq.id) 
+                else:
+                    logger.warning("Sequence %s was not found in global database, will be added by hand", seq.id)
+                    s_new.append (seq.id)
+                    self.g_csv.loc[str(seq.id)] = pd.Series({
+                        'sequence_name':seq.iq, 
+                        'central_sample_id':seq.iq, 
+                        'submission_org_code':"NORW",
+                        'submission_org':"Norwich"})
+            else: # sequence has long, official name
+                if "NORW" in seq.id: ## we only consider replacing local seqs, otherwise database migth have newer  
+                    s_long.append(seq.id)
+                    seqs_in_global.append(seq.id)
+                else:
+                    seq.id = None
+        logger.info("%s sequences found with long name and %s with short name on database. %s new sequences (not in database).",
+                str(len(s_long)), str(len(s_short)), str(len(s_new)))
 
-    runstr = f"cd {output_dir} && pandoc {mkd_file_name} -o {pdf_file_name} --from markdown --template {pandoc_template_name} --listings"
-    logger.info("running command:: %s", runstr)
-    proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)
-    logger.debug("output verbatim:\n%s",proc_run)
+        sequence = {x.id:x for x in sequence if x.id is not None}
+        if replace: # align all, which will replace existing ones in g_seq
+            seq_list = [x for x in sequences.values()]
+        else: # alignment will contain only those not found in global
+            seq_list = [x for x in sequences.values() if x.id not in seqs_in_global]
+        sqn = [x.id for x in seq_list]
+        logger.info("Will update frequency info and align %s sequences", str(len(sqn)))
+        self.g_csv.loc[ self.g_csv["sequence_name"].isin(sqn),"peroba_freq_acgt" ] = np.nan # recalculate
+        self.g_csv.loc[ self.g_csv["sequence_name"].isin(sqn),"peroba_freq_n" ] = np.nan
+        self.g_csv, sequence = add_sequence_counts_to_metadata (self.g_csv, sequence, from_scratch=False) # seqname must be in index
+
+        # merge sequences (align local first, since global are already aligned)
+        ref_seq = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/MN908947.3.fas")  
+        aln = minimap2_align_seqs(seq_list, reference_path=ref_seq)
+        logger.info("Finished aligning %s local sequences", str(len(aln)))
+        self.g_seq.update({x.id:x for x in aln})
+
+        if csv:
+            cols = [x for x in self.cols if x in csv.columns]
+            csv = csv[cols] # remove other columns
+            # global sequences with a match 
+            csv = csv[ csv["central_sample_id"].isin(s_short + s_new) ] 
+            logger.info("Local data contains %s rows matching sequences (excluding sequences matching long names in global database", 
+                    str(csv.shape[0]))
+            # merge metadata, to then spli into local and global datasets
+            csv["peroba_seq_uid"] = csv["sequence_name"]
+            csv.reset_index (drop=False, inplace=True) ## drop=False makes index (central_sample_id) become a column
+            csv.set_index (self.g_csv.index.names, drop = True, inplace = True) # drop to avoid an extra 'peroba_seq_uid' column
+            self.g_csv = common.df_merge_metadata_by_index (csv, self.g_csv) 
+        self.split_data_sequences()
+        return
+
+    def split_data_sequences (self):
+        self.l_csv = self.g_csv[  self.g_csv["submission_org_code"].str.contains("NORW", na=False) ]
+        self.g_csv = self.g_csv[ ~self.g_csv["submission_org_code"].str.contains("NORW", na=False) ]
+        self.l_seq = {x:y for x,y in self.g_seq.items() if x in self.l_csv["sequence_name"]}
+        self.g_seq = {x:y for x,y in self.g_seq.items() if x in self.g_csv["sequence_name"]}
+        logger.info ("split data into %s global and %s local sequences", str(self.g_csv.shape[0]), str(self.l_csv.shape[0]))
 
 def read_peroba_database (f_prefix): 
-    f_suffix = { ## TODO: share across files (peroba_common?)
-            "metadata": ".metadata.csv.gz",
-            "tree": ".tree.nhx",
-            "sequences": ".sequences.fasta.bz2"
-            }
     if f_prefix[-1] == ".": f_prefix = f_prefix[:-1] ## both `perobaDB.0621` and `perobaDB.0621.` are valid
-    fname = f_prefix+f_suffix["metadata"]
+    fname = f_prefix + common.suffix["metadata"]
     logger.info(f"Reading database metadata from \'{fname}\'")
     metadata = pd.read_csv (fname, compression="infer", index_col="peroba_seq_uid") 
 
-    fname = f_prefix+f_suffix["tree"]
+    fname = f_prefix + common.suffix["tree"]
     logger.info(f"Reading database tree from \'{fname}\'")
     treestring = open(fname).readline().rstrip().replace("\'","").replace("\"","").replace("[&R]","")
-    tree = ete3.Tree(treestring)
+    tree = treeswift.read_tree_newick (treestring) 
 
-    fname = f_prefix+f_suffix["sequences"]
+    fname = f_prefix + common.suffix["alignment"]
     logger.info(f"Reading database sequences from \'{fname}\'")
-    sequences = read_fasta (fname, check_name = False)
+    sequences = common.read_fasta (fname, check_name = False)
 
     logger.info("Finished loading the database; dataframe has dimensions %s and it's assumed we have the same \
             number of sequences; the tree may be smaller", metadata.shape)
-    return [metadata, sequence, tree]
+    return [metadata, sequences, tree]
 
-def generate_backbone_dataset (database, csv, sequences, trees, prefix):
-
+def generate_backbone_dataset (database, csv, sequences, trees, replace, prefix):
+    ## treeswift has node.set_label(label) to change name when we find NORW official name
+    bb = PerobaBackbone (database)
+    bb.add_local_data_and_sequences (csv, sequences, replace)
+#    bb.add_trees (trees)
 
     
 class ParserWithErrorHelp(argparse.ArgumentParser):
@@ -195,7 +150,7 @@ def main():
     description="""
     peroba_backbone is the script that generates a global backbone data set (COGUK+GISAID) given a local one (NORW).
     It depends on the prefix for a perobaDB set of files (from `peroba_database`), like "perobaDB.0519".
-    It's recommended that you add also a local CSV metadata, and you can furthermore add a newick file with extra 
+    It's recommended that you also local sequences, even without CSV metadata. You can furthermore add a newick file with extra 
     trees (the tree from previous run is a good choice).
     """, 
     usage='''peroba_backbone <perobaDB> [options]''')
@@ -209,6 +164,7 @@ def main():
     parser.add_argument('-s', '--sequences', metavar='fasta.bz2', help="extra sequences from NORW")
     parser.add_argument('-t', '--trees', metavar='', help="file with trees in newick format to help produce backbone")
     parser.add_argument('-o', '--output', action="store", help="Output database directory. Default: working directory")
+    parser.add_argument('-r', '--replace', default=False, action='store_true', help="replace database sequence with local version")
 
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel)
@@ -217,7 +173,7 @@ def main():
         pathlib.Path(output_d).mkdir(parents=True, exist_ok=True) # python 3.5+ create dir if it doesn't exist
     else: 
         output_d = current_working_dir
-     prefix = os.path.join(output_d, "peroba_backbone." + datetime.datetime.now().strftime("%m%d_%H%M") + ".")
+    prefix = os.path.join(output_d, "peroba_backbone." + datetime.datetime.now().strftime("%m%d_%H%M") + ".")
 
     if args.input: input_d = os.path.join(current_working_dir, args.input)
     else: input_d = current_working_dir
@@ -225,8 +181,8 @@ def main():
     logger.info("Reading metadata, sequences, and tree from peroba_database")
     database = read_peroba_database (os.path.join(input_d, args.perobaDB)) # something like "my_folder/perobaDB.0515"
 
+    csv = None
     if (args.csv):
-        csv = None
         fname = os.path.join(current_working_dir, args.csv)
         if not os.path.exists(fname):
             fname = os.path.join(input_d, args.csv)
@@ -236,8 +192,8 @@ def main():
             logger.info("Reading CSV file with metadata from NORW")
             csv = df_read_genome_metadata (fname, index_name = "central_sample_id")
 
+    sequences = None
     if (args.sequences):
-        sequences = None
         fname = os.path.join(current_working_dir, args.sequences)
         if not os.path.exists(fname):
             fname = os.path.join(input_d, args.sequences)
@@ -245,20 +201,20 @@ def main():
             logger.warning ("Could not find sequence file {args.sequences}; Will proceed without it")
         else:
             logger.info("Reading fasta file with sequences from NORW")
-            sequences = read_fasta (fname, check_name = False)
+            sequences = common.read_fasta (fname, check_name = False)
 
+    trees = None
     if (args.trees):
-        trees = None
         fname = os.path.join(current_working_dir, args.trees)
         if not os.path.exists(fname):
             fname = os.path.join(input_d, args.trees)
         if not os.path.exists(fname):
             logger.warning ("Could not find tree file {args.trees}; Will proceed without it")
         else:
-            logger.info("Reading file with current trees  and checking for duplicate names")
+            logger.info("Reading file with current trees and checking for duplicate names")
             treestring = [x.rstrip().replace("\'","").replace("\"","").replace("[&R]","") for x in open(fname)]
             trees = []
-            for i,trs in enumerate (treestring): 
+            for i,trs in enumerate (treestring): ## I use ete3 to remove duplicate leaves  
                 tre = ete3.Tree(trs)
                 tree_length = len([leaf.name for leaf in tre.iter_leaves()])
                 tree_leaves = {str(leaf.name):leaf for leaf in tre.iter_leaves()} # dup leaves will simply overwrite node information
@@ -268,7 +224,7 @@ def main():
                 logger.info("%s leaves in treefile %s", len(tree_leaves), str(i))
                 trees.append(tre)
 
-    generate_backbone_dataset (database, csv, sequences, trees, prefix)
+    generate_backbone_dataset (database, csv, sequences, trees, args.replace, prefix)
 
 
 if __name__ == '__main__':

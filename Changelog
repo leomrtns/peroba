@@ -1,3 +1,9 @@
+2020.05.24 Two distinct approaches for distrib files
+	* report: template files for report, accessed by hand with
+	os.path.join( os.path.dirname(os.path.abspath(__file__)), "../report")
+	* peroba/data: reference files used by backbone (minimap2, snps from `lineages`), one of
+	str(pkg_resources.resource_filename( __name__, 'data/singletons.csv'))
+	os.path.join(str(pkg_resources.resource_filename( __name__, 'data/')), "singletons.csv")
 
 TODO_LIST
  - always use path.os.join()

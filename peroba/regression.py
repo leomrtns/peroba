@@ -1,33 +1,36 @@
 #!/usr/bin/env python
 
-## TODO: "UNKNOWN SOURCE" and "UNKNOWN" are the same adm2 (in cog)
-
-import logging, ete3
+import logging, ete3, argparse
 import numpy as np, pandas as pd
-from Bio import Seq, SeqIO
-import datetime, sys, lzma, gzip, bz2, re, glob, collections, subprocess, os, itertools, pathlib
+from Bio import Seq, SeqIO, Align, AlignIO, Phylo, Alphabet, pairwise2
+#from Bio.SeqRecord import SeqRecord
+import datetime, time, codecs, sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib
+from sklearn.neighbors import NearestNeighbors, BallTree ## KDTree does NOT accept hamming
+from sklearn.cluster import OPTICS
+#from fuzzywuzzy import fuzz ## fuzz.ratio(x, "E959D")
+import xxhash
 
-logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
+from Bio import Seq, SeqIO, Align, AlignIO, Phylo, Alphabet, pairwise2
+from Bio.SeqRecord import SeqRecord
+from Bio.Align import AlignInfo, Applications
+from Bio.Blast import NCBIXML
+from Bio.Phylo import draw, TreeConstruction  #TreeConstruction.DistanceCalculator, TreeConstruction.DistanceTreeConstructor
+import ete3 
+# https://bioinformatics.stackexchange.com/questions/4337/biopython-phylogenetic-tree-replace-branch-tip-labels-by-sequence-logos
+
+import numpy as np, pandas as pd, seaborn as sns
+from sklearn import manifold, metrics, cluster, neighbors, decomposition, preprocessing
+import skbio, parasail, dendropy, datetime, time, codecs, joypy
+import sys, gzip, lzma, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib
+
+logger = logging.getLogger(__name__) 
 logger.propagate = False
 stream_log = logging.StreamHandler()
 log_format = logging.Formatter(fmt='peroba %(asctime)s [%(levelname)s] %(message)s', datefmt="%Y-%m-%d %H:%M")
 stream_log.setFormatter(log_format)
 stream_log.setLevel(logging.INFO)
 logger.addHandler(stream_log)
-
-prefix = {
-        "database": "perobaDB." ## timestamp comes here (watch for double dots)
-        }
-suffix = {
-        "metadata": ".metadata.csv.gz",
-        "raw": ".raw.csv.gz",
-        "tree": ".tree.nhx",
-        "sequences": ".sequences.fasta.xz",
-        "alignment": ".sequences.aln.xz"
-        }
         
-#asr_cols = ["adm2", "uk_lineage", "lineage", "phylotype", "submission_org_code", "date_sequenced", "source_age", "source_sex", "collecting_org", "ICU_admission"]
-asr_cols = ["adm2", "uk_lineage", "lineage", "phylotype", "special_lineage", "adm2_private"]
 
 def read_ete_treefile (treefile, multi = None):
     if multi is None: 
@@ -124,8 +127,7 @@ def df_read_genome_metadata (filename, primary_key = "sequence_name", rename_dic
     else:
         df1.set_index (str(index_name), drop = True, inplace = True) # drop the column to avoid having both with same name
 
-    if "adm2" in df1.columns:
-        df1['adm2'] = df1['adm2'].str.title()
+    df1['adm2'] = df1['adm2'].str.title()
     df1 = df1.groupby(df1.index).aggregate("first"); # duplicated indices are allowed in pandas
     return df1
 
@@ -168,43 +170,3 @@ def df_finalise_metadata (df, exclude_na_rows = None, exclude_columns = "default
     if remove_duplicate_columns: # who knows which column it will choose (i.e. column names)
         df = df.T.drop_duplicates().T # transpose, remove duplicate rows, and transpose again
     return df
-
-def add_sequence_counts_to_metadata (metadata, sequences, from_scratch = None):
-    if from_scratch is None: from_scratch = True
-    """ counts the proportions of indel/uncertain bases (i.e `N` and `-`) as well as number of ACGT.
-    Notice that they do not sum up to one since we have partial uncertainty (`W`,`S`, etc.) that can be used
-    This should be done on UNALIGNED sequences
-    """
-    def calc_freq_N (index):
-        if index not in sequences: return 1.
-        if sequences[index] is None: return 1. ## missing sequences
-        genome = str(sequences[index].seq); l = len(genome)
-        if (l):
-            number_Ns = sum([genome.upper().count(nuc) for nuc in ["N", "-"]])
-            return number_Ns / l
-        else: return 1.
-    def calc_freq_ACGT (index):
-        if index not in sequences: return 0.
-        if sequences[index] is None: return 0. ## missing sequences
-        genome = str(sequences[index].seq); l = len(genome)
-        if (l):
-            number_ACGTs = sum([genome.upper().count(nuc) for nuc in ["A", "C", "G", "T"]])
-            return number_ACGTs / len(genome)
-        else: return 0.
-
-    if from_scratch or "peroba_freq_n" not in metadata.columns: # map() sends the index to lambda function
-        metadata["peroba_freq_n"] = metadata.index.map(lambda x: calc_freq_N (x))  
-    else: # only update null values 
-        nilvalues = metadata[metadata["peroba_freq_n"].isnull()].index.map(lambda x: calc_freq_N (x))  
-        if len(nilvalues) > 0:
-            metadata[metadata["peroba_freq_n"].isnull()] = nilvalues 
-    
-    if from_scratch or "peroba_freq_acgt" not in metadata.columns: # map() sends the index to lambda function
-        metadata["peroba_freq_acgt"] = metadata.index.map(lambda x: calc_freq_ACGT (x))  
-    else: # only update null values 
-        nilvalues = metadata[metadata["peroba_freq_acgt"].isnull()].index.map(lambda x: calc_freq_ACGT (x))  
-        if len(nilvalues) > 0:
-            metadata[metadata["peroba_freq_acgt"].isnull()] = nilvalues 
-
-    return metadata, sequences
-

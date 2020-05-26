@@ -37,7 +37,7 @@ setuptools.setup(
     },
     packages = setuptools.find_packages(),
     include_package_data=True,
-    # package_data = {'peroba': ['data/*']},
+    package_data = {'peroba': ['data/*']},
     data_files = [("", ["LICENSE"])],
     python_requires = '>={}'.format('.'.join(str(n) for n in min_version)),
     license='GPLv3+',

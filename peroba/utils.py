@@ -1,16 +1,17 @@
 #!/usr/bin/env python
-from Bio import Seq, SeqIO, Align, AlignIO, Phylo, Alphabet, pairwise2
+from Bio import Seq, SeqIO, Align, AlignIO, Alphabet 
 from Bio.SeqRecord import SeqRecord
-from Bio.Align import AlignInfo, Applications
-from Bio.Blast import NCBIXML
-from Bio.Phylo import draw, TreeConstruction  #TreeConstruction.DistanceCalculator, TreeConstruction.DistanceTreeConstructor
-import ete3 
-# https://bioinformatics.stackexchange.com/questions/4337/biopython-phylogenetic-tree-replace-branch-tip-labels-by-sequence-logos
+from Bio.Align import AlignInfo
+import numpy as np
+import datetime, sys, gzip, lzma, bz2, re, subprocess, os, itertools, ete3
 
-import numpy as np, pandas as pd, seaborn as sns
-from sklearn import manifold, metrics, cluster, neighbors, decomposition, preprocessing
-import skbio, parasail, dendropy, datetime, time, codecs, joypy
-import sys, gzip, lzma, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib
+#from Bio.Phylo import draw, TreeConstruction  #TreeConstruction.DistanceCalculator, TreeConstruction.DistanceTreeConstructor
+#from Bio import Phylo, pairwise2
+#from Bio.Align import Applications
+#from Bio.Blast import NCBIXML
+#import seaborn as sns, pandas as pd
+#from sklearn import manifold, metrics, cluster, neighbors, decomposition, preprocessing
+#import skbio, parasail, dendropy, time, codecs, joypy, pathlib, random, errno, collections, pickle, glob
 
 def print_redblack(textr="", textb=""):
     print ('\x1b[0;1;31;1m'+ str(textr) + '\x1b[0;1;30;1m'+ str(textb) + '\x1b[0m')

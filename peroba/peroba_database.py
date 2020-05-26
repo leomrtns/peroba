@@ -78,12 +78,26 @@ class PerobaDatabase:
         if self.sequences is not None: 
             fname = self.prefix + common.suffix["sequences"]
             logger.info(f"Saving unaligned sequences to file {fname}")
-            with bz2.open(fname,"wb") as fw: 
+            if   "bz2" in fname[-5:]: this_open = bz2.open
+            elif "gz"  in fname[-5:]: this_open = gzip.open
+            elif "xz"  in fname[-5:]: this_open = lzma.open
+            else:  this_open = open
+            with this_open(fname,"wb") as fw: 
                 for name, rec in self.sequences.items():
                     if rec:  ## missing/query sequences
                         seq = str(rec.seq)
                         fw.write(str(f">{name}\n{seq}\n").encode())
-           ##  os.path.dirname(__file__) + "/data/viralmsa blabla"
+                        rec.id = name ## make sure alignment will have same names
+
+            fname = self.prefix + common.suffix["alignment"]
+            logger.info(f"Aligning sequences...")
+            ref_seq = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/MN908947.3.fas")  
+            aln = minimap2_align_seqs([x for x in self.sequences.values()], reference_path=ref_seq)
+            logger.info(f"... and saving alignment to file {fname}")
+            with this_open(fname,"wb") as fw: 
+                for sequence in aln: # list of sequences (not dictionary as above) 
+                    fw.write(str(f">{sequence.id}\n{sequence.seq}\n").encode())
+            logger.info(f"Finished saving alignment")
         else:
             logger.warning("Sequences missing: this won't be a valid database")
 
@@ -146,7 +160,8 @@ class PerobaDatabase:
         samples_found_in_sequences = self.metadata.index.isin([x for x in self.sequences.keys()])
         self.metadata = self.metadata[samples_found_in_sequences]
         logger.debug("DataSeq:: Number of dataframe rows with sequence information = %s (should be same as above)", str(sum(samples_found_in_sequences)))
-        self.add_sequence_counts_to_metadata (from_scratch = False) ## add column if missing 
+        self.metadata, self.sequences = common.add_sequence_counts_to_metadata (self.metadata, self.sequences, from_scratch = False) ## add column if missing 
+        self.raw = self.raw.combine_first (self.metadata[["peroba_freq_n", "peroba_freq_acgt"]]) ## add columns by index
 
     def merge_sequence_tree (self): # keep only intersection
         if self.no_pruning or self.tree is None or self.sequences is None: return
@@ -175,45 +190,6 @@ class PerobaDatabase:
             self.tree.prune([node for node in self.tree_leaves.values()], preserve_branch_length=True) # or leafnames, but fails on duplicates
         ## remove table rows absent from tree or just mark tree as incomplete
         logger.debug("DataTree:: Tree will not be used to remove rows from metadata")
-    
-    def add_sequence_counts_to_metadata (self, from_scratch = None):
-        if from_scratch is None: from_scratch = True
-        """ counts the proportions of indel/uncertain bases (i.e `N` and `-`) as well as number of ACGT.
-        Notice that they do not sum up to one since we have partial uncertainty (`W`,`S`, etc.) that can be used
-        TODO: This should not be done here, but in downstream analysis 
-        """
-        def calc_freq_N (index):
-            if index not in self.sequences: return 1.
-            if self.sequences[index] is None: return 1. ## missing sequences
-            genome = str(self.sequences[index].seq); l = len(genome)
-            if (l):
-                number_Ns = sum([genome.upper().count(nuc) for nuc in ["N", "-"]])
-                return number_Ns / l
-            else: return 1.
-        def calc_freq_ACGT (index):
-            if index not in self.sequences: return 0.
-            if self.sequences[index] is None: return 0. ## missing sequences
-            genome = str(self.sequences[index].seq); l = len(genome)
-            if (l):
-                number_ACGTs = sum([genome.upper().count(nuc) for nuc in ["A", "C", "G", "T"]])
-                return number_ACGTs / len(genome)
-            else: return 0.
-
-        if from_scratch or "peroba_freq_n" not in self.metadata.columns: # map() sends the index to lambda function
-            self.metadata["peroba_freq_n"] = self.metadata.index.map(lambda x: calc_freq_N (x))  
-        else: # only update null values 
-            nilvalues = self.metadata[self.metadata["peroba_freq_n"].isnull()].index.map(lambda x: calc_freq_N (x))  
-            if len(nilvalues) > 0:
-                self.metadata[self.metadata["peroba_freq_n"].isnull()] = nilvalues 
-        
-        if from_scratch or "peroba_freq_acgt" not in self.metadata.columns: # map() sends the index to lambda function
-            self.metadata["peroba_freq_acgt"] = self.metadata.index.map(lambda x: calc_freq_ACGT (x))  
-        else: # only update null values 
-            nilvalues = self.metadata[self.metadata["peroba_freq_acgt"].isnull()].index.map(lambda x: calc_freq_ACGT (x))  
-            if len(nilvalues) > 0:
-                self.metadata[self.metadata["peroba_freq_acgt"].isnull()] = nilvalues 
-
-        self.raw = self.raw.combine_first (self.metadata[["peroba_freq_n", "peroba_freq_acgt"]]) ## add columns by index
         
 class ParserWithErrorHelp(argparse.ArgumentParser):
     def error(self, message):
