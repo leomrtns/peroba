@@ -1,4 +1,5 @@
-import logging, ete3, argparse
+import logging, ete3, argparse, pathlib
+import pandas as pd
 import matplotlib
 matplotlib.use('Agg') # first rule to prevent system of chosing X11-based
 import matplotlib.pyplot as plt
@@ -58,6 +59,14 @@ Only clusters with more than {minc_size} elements are shown.
 The complete phylogenetic tree is displayed in a separate document due to its large size.<br>
 
 \n<br>(report generated at {today})<br>
+Care must be taken when interpreting due to the phylogenetic uncertainty (many similar sequences, with ambiguous sites,
+and all other statistical caveats) and due to the incomplete nature of the phylogenetic metadata: sequences failing
+phylogenetic quality (excess of `N`s etc, not the same as sequencing quality control) or some other reason are not
+included in the metadata. We add `NORW` sequences back whenever possible. 
+
+Furthermore this analysis uses only a small subset of all available genomic data at COG-UK: it is based on sequences
+inferred to be relevant to the regional analysis, and even those may be removed (due to low quality or duplicates).
+
 This is a **draft**. Software still under development.<br>
 """.format(today=datetime.datetime.now().strftime("%Y-%m-%d %H:%M")) 
     tree.render(os.path.join(output_dir,"full_tree.pdf"), w=1200, tree_style=ts)

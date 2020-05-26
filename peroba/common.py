@@ -27,7 +27,7 @@ suffix = {
         }
         
 #asr_cols = ["adm2", "uk_lineage", "lineage", "phylotype", "submission_org_code", "date_sequenced", "source_age", "source_sex", "collecting_org", "ICU_admission"]
-asr_cols = ["adm2", "uk_lineage", "lineage", "phylotype", "special_lineage", "adm2_private"]
+asr_cols = ["adm2", "uk_lineage", "lineage", "phylotype", "adm2_private"] ## special_lineage dissapeared in 2020.05.22
 
 def read_ete_treefile (treefile, multi = None):
     if multi is None: 
@@ -147,7 +147,17 @@ def df_finalise_metadata (df, exclude_na_rows = None, exclude_columns = "default
 
     # df['days_since_Dec19'] = df['collection_date'].map(lambda a: get_days_since_2019(a, impute = True)) ## not here
     df["collection_datetime"] = pd.to_datetime(df["collection_date"], infer_datetime_format=False, errors='coerce')
-    df = df.sort_values(by=['lineage_support', 'collection_datetime'], ascending=[False, True])
+    cols = [x for x in ['lineage_support', 'collection_datetime'] if x in df.columns]
+    df = df.sort_values(by=cols, ascending=False)
+    
+    ## CURRENTLY NOT WORKING since sequence_name was used as primary key... 
+    # COGUK phylo analysis removes low-quality seqs, which are deleted from metadata as well. (COGUK phylo assigns decent senames)
+    #   I give another chance for these deleted sequences, if their names correspond to sample_central_id 
+
+    #df.reset_index (drop=False, inplace=True) ## drop=False will make peroba_seq_uid become a column
+    #df['sequence_name'].fillna("sample_central_id", inplace=True)
+    #df['peroba_seq_uid'].fillna("sample_central_id", inplace=True)
+    #df.set_index ("peroba_seq_uid", drop = True, inplace = True) # drop deletes the extra peroba_seq_uid column
 
     # default values for missing rows (in case we don't want to remove those rows)
     #if not exclude_na_rows or "uk_lineage" not in exclude_na_rows:
@@ -197,14 +207,14 @@ def add_sequence_counts_to_metadata (metadata, sequences, from_scratch = None):
     else: # only update null values 
         nilvalues = metadata[metadata["peroba_freq_n"].isnull()].index.map(lambda x: calc_freq_N (x))  
         if len(nilvalues) > 0:
-            metadata[metadata["peroba_freq_n"].isnull()] = nilvalues 
+            metadata.loc[metadata["peroba_freq_n"].isnull(), "peroba_freq_n"] = nilvalues 
     
     if from_scratch or "peroba_freq_acgt" not in metadata.columns: # map() sends the index to lambda function
         metadata["peroba_freq_acgt"] = metadata.index.map(lambda x: calc_freq_ACGT (x))  
     else: # only update null values 
         nilvalues = metadata[metadata["peroba_freq_acgt"].isnull()].index.map(lambda x: calc_freq_ACGT (x))  
         if len(nilvalues) > 0:
-            metadata[metadata["peroba_freq_acgt"].isnull()] = nilvalues 
+            metadata.loc[metadata["peroba_freq_acgt"].isnull(), "peroba_freq_acgt"] = nilvalues 
 
     return metadata, sequences
 

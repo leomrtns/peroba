@@ -78,11 +78,14 @@ class PerobaDatabase:
         if self.sequences is not None: 
             fname = self.prefix + common.suffix["sequences"]
             logger.info(f"Saving unaligned sequences to file {fname}")
+            mode = "wb"
             if   "bz2" in fname[-5:]: this_open = bz2.open
             elif "gz"  in fname[-5:]: this_open = gzip.open
             elif "xz"  in fname[-5:]: this_open = lzma.open
-            else:  this_open = open
-            with this_open(fname,"wb") as fw: 
+            else:  
+                this_open = open
+                mode = "w"
+            with this_open(fname, mode) as fw: 
                 for name, rec in self.sequences.items():
                     if rec:  ## missing/query sequences
                         seq = str(rec.seq)
