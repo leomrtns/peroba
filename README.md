@@ -15,7 +15,19 @@ online](https://www.cogconsortium.uk/data/).
 **peroba** is the name of a Brazilian timber tree, but if you like acronyms it stands 
 for Phylogenetic Epidemiology with ROBust Assignment. 
 
+## Modules
+**peroba** is composed of three modules, that should be run in order:
+1. **`peroba_database`**: This script collects information from several sources and generates a set of `perobaDB` files.
+2. **`peroba_backbone`**: This script selects a set of "global" sequences from `perobaDB` to be analysed together with the local ones 
+(`NORW`). It finds local sequences within the database, but the user should also include other local sequences. 
+3. **`peroba_report`**: once the user finishes the analysis (i.e. has a phylogenetic tree using suggestions from
+   `peroba_backbone`), this script will estimate ancestral states and generate a PDF report.
 
+## Caveats
+Not all sequences pass the sequencing quality control. Those that do may be excluded from COGUK phylogenetic analysis,
+which means we won't have metadata (importantly, `sequence_name` which allows mapping between tree, sequence, and epi
+data) information from them. 
+We minimise this by using local information whenever possible, but still the reasons for exclusion remain. 
 
 ## License 
 SPDX-License-Identifier: GPL-3.0-or-later
