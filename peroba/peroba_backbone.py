@@ -19,24 +19,48 @@ current_working_dir = os.getcwd()
 
 # TODO: we can create a "priority" column based on geography, to sort/preference
 
-prefsort = [   # order of preference for samples (True => smaller values preferred)
+# order of preference for samples (True => smaller values preferred)
+prefsort = [
     ['peroba_freq_acgt', False],
     [ 'peroba_freq_n', True],
     [ "PCR Ct value", True],
     [ "Coverage (X)", False],
-    [ "submission_org", True],  # just to add preference for any value instead of nan (i.e. COGUK is preferred)
+    [ "submission_org_code", True],  # just to add preference for any value instead of nan (i.e. COGUK is preferred)
+    [ "adm1", True], # adms and submission_org_code will be catergories, with first ones preferred
+    [ "adm2", True],
+    [ "country", True],
     [ 'lineage_support', False],
-    ['collection_datetime', False] 
-]
+    [ 'collection_datetime', False] 
+    ]
+
+# keys will be categorical columns, values are in order of preference
+favourite_cats = { 
+        "adm1": ["UK-ENG"],
+        "adm2": ["Norfolk", "Suffolk", "Cambridgeshire"],
+        "submission_org_code": ["NORW", "CAMB", "SANG", "PHEC", "LOND"],
+        "country": ["UK"]
+        }
+
+# NaNs will be replaced by "" in these columns (so that we can groupby)
+fill_missing_cols = ["lineage", "acc_lineage", "del_lineage", "submission_org_code", 
+        "submission_org", "adm0", "adm1", "adm2","uk_lineage","phylotype", "country"]
+
+# cast type as numeric, to allow comparison/sorting
+numeric_cols = ['peroba_freq_acgt', 'peroba_freq_n', "PCR Ct value", "Coverage (X)",'lineage_support']
 
 class PerobaBackbone:
     g_csv = None
     g_seq = None # dictionary
+    g_snp = None # must match local, therefore calculated first 
     l_csv = None
     l_seq = None # dictionary 
-    trees = None ## these are treeswift trees
+    l_snp = None
+    trees = None ## these are treeswift trees that will be modified, pruned
+    usrtrees = None ## these are user-defined trees that we'll return enriched (minimal pruning)
+    usrseqs = dict() ## all discarded sequences (which may be on user tree)
     # subset of columns from that may be useful (drop others)
-    cols = ["sequence_name", "central_sample_id", "submission_org_code", "submission_org", "adm2", "collection_datetime", 
+    cols = ["sequence_name", "central_sample_id", "submission_org_code", "submission_org", "collection_datetime", 
+            "adm0", "adm1", "adm2", "acc_lineage", "del_lineage",  
             "collection_date", "country" , "cov_id", "sequencing_org", "sequencing_org_code", "sequencing_submission_date",
             "lineage", "lineage_support", "special_lineage","uk_lineage", "phylotype",
             "peroba_freq_acgt", "peroba_freq_n", "peroba_seq_uid", "source_age", "source_sex", ## until here  from global, below is local
@@ -53,16 +77,11 @@ class PerobaBackbone:
         cols = [x for x in self.cols if x in peroba_db[0].columns]
         self.g_csv = self.g_csv[cols] # remove other columns
         
-        pref = [x for x in prefsort if x[0] in self.g_csv.columns] # sort only existing columns
-        self.sort_cols = [x[0] for x in pref] # follow this order (thus can't use dict...)
-        self.sort_ascend = [x[1] for x in pref] # same order as sort_cols
-        
         logger.info("Imported %s rows from database", str(self.g_csv.shape[0]))
     
     def add_local_data_and_sequences (self, csv=None, sequence=None, replace = False):
         if not sequence:
             logger.warning("Nothing to merge without sequences")
-            self.split_data_sequences()
             return
 
         name_dict = {x:y for x,y in zip(self.g_csv["central_sample_id"], self.g_csv["sequence_name"])}
@@ -76,20 +95,23 @@ class PerobaBackbone:
                     s_short.append (seq.id) # appends short name, while seqs_in_global[] has long name
                     seq.id = name_dict[seq.id] # receive coguk long name
                     seqs_in_global.append (seq.id) 
-                else:
-                    logger.warning("Sequence %s was not found in global database, will be added by hand", seq.id)
+                else: ## will be added through a new_rows dataframe
                     s_new.append (seq.id)
-                    self.g_csv.loc[str(seq.id)] = pd.Series({
-                        'sequence_name':seq.id, 
-                        'central_sample_id':seq.id, 
-                        'submission_org_code':"NORW",
-                        'submission_org':"Norwich"})
+                    #self.g_csv.loc[str(seq.id)] = pd.Series({'sequence_name':seq.id, 'central_sample_id':seq.id,'submission_org_code':"NORW", 'submission_org':"Norwich"})
             else: # sequence has long, official name
                 if "NORW" in seq.id: ## we only consider replacing local seqs, otherwise database migth have newer  
                     s_long.append(seq.id)
                     seqs_in_global.append(seq.id)
                 else:
                     seq.id = None
+
+        if len(s_new) > 0:
+            logger.warning("Sequences not found in global database will be added by hand:\n%s\n", "\t".join(s_new))
+            new_rows = pd.DataFrame({'peroba_seq_uid':s_new, 'sequence_name': s_new, 'central_sample_id':s_new,
+                'submission_org_code':"NORW" ,'submission_org':"Norwich"})
+            new_rows = new_rows.groupby("peroba_seq_uid").aggregate("first") # duplicate sequences --> this makes peroba_seq_uid the index 
+            self.g_csv = self.g_csv.combine_first(new_rows)
+
         logger.info("%s long-named sequences and %s short-named sequences found on database. %s new sequences (not in database).",
                 str(len(s_long)), str(len(s_short)), str(len(s_new)))
         logger.info("Now I'll check for obvious duplicate sequences, with identical names (only first will be used)")
@@ -112,11 +134,11 @@ class PerobaBackbone:
         else: # alignment will contain only those not found in global
             seq_list = [x for x in sequence.values() if x.id not in seqs_in_global]
         sqn = [x.id for x in seq_list]
-        logger.info("Will update frequency info and align %s sequences", str(len(sqn)))
-        self.g_csv.loc[self.g_csv["sequence_name"].isin(sqn), "peroba_freq_acgt"] = np.nan # recalculate
-        self.g_csv.loc[self.g_csv["sequence_name"].isin(sqn), "peroba_freq_n"] = np.nan
-        logger.info("DEBUG")
 
+        logger.info("Will update frequency info and align %s sequences", str(len(sqn)))
+        sqn = self.g_csv["sequence_name"].isin(sqn)
+        self.g_csv.loc[sqn, "peroba_freq_acgt"] = np.nan # recalculate
+        self.g_csv.loc[sqn, "peroba_freq_n"] = np.nan
         self.g_csv, sequence = common.add_sequence_counts_to_metadata (self.g_csv, sequence, from_scratch=False) # seqname must be in index
 
         # merge sequences (align local first, since global are already aligned)
@@ -137,24 +159,82 @@ class PerobaBackbone:
             csv.reset_index (drop=False, inplace=True) ## drop=False makes index (central_sample_id) become a column
             csv.set_index (self.g_csv.index.names, drop = True, inplace = True) # drop to avoid an extra 'peroba_seq_uid' column
             self.g_csv = common.df_merge_metadata_by_index (csv, self.g_csv) 
-        self.split_data_sequences()
         return
 
-    def split_data_sequences (self):
+    def trim_sequences (self, trim = True):  
+        if trim is True: trim = [265, 29675]
+        if trim[0] < 1: trim[0] = 1
+        if trim[1] > 29902: trim[1] = 29902 # genome size is 29903
+        logger.info("Trimming genomes from site %s to site %s",str(trim[0]), str(trim[1]))
+        if self.g_seq is not None:  # this should always work
+            for x in self.g_seq.values():
+                x.seq = x.seq[trim[0]:trim[1]]
+        if self.l_seq is not None:  # usually this is None since we trim _before_ splitting 
+            for x in self.l_seq.values():
+                x.seq = x.seq[trim[0]:trim[1]]
+    
+    def sort_categories (self):
+        df = self.g_csv.copy()
+        pref = [x for x in prefsort if x[0] in df.columns] # sort only existing columns
+        self.sort_cols = [x[0] for x in pref] # follow this order (thus can't use dict...)
+        self.sort_ascend = [x[1] for x in pref] # same order as sort_cols
+        logger.info("Ordering metadata after categorisation") 
+        if "adm2" in df.columns:
+            df["adm2"] = df["adm2"].replace(["Unknown Source","Unknown", np.nan],"")
+            df["adm2"] = df["adm2"].replace({"Greater London":"Greater_London", "Hertfordshire":"Herefordshire"})
+
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col])
+
+        for col in fill_missing_cols:
+            if col in df.columns:
+                df[col].fillna ("", inplace = True) 
+
+        for col,favs in favourite_cats.items():
+            if col in df.columns:
+                values = [x for x in df[col].unique() if x not in favs + [""]] 
+                values = favs + values  + [""] # make sure favs are first in list, and empty are last
+                df[col] = pd.Categorical(df[col], categories = values, ordered=True)
+        df = df.sort_values(by=self.sort_cols, ascending=self.sort_ascend)
+        self.g_csv = df
+
+    def finalise_and_split_data_sequences (self, trim = True, strict = False):
+        self.trim_sequences(trim=trim)
+        self.sort_categories()
+        logger.info("Finding SNPs to speed up calculations")
+        snp_aln = snpsites_from_alignment ([x for x in self.g_seq.values()], strict=strict)
+
+        logger.info ("Splitting data into global and local (NORW)")
         self.l_csv = self.g_csv[  self.g_csv["submission_org_code"].str.contains("NORW", na=False) ]
         self.g_csv = self.g_csv[ ~self.g_csv["submission_org_code"].str.contains("NORW", na=False) ]
         self.l_seq = {x:y for x,y in self.g_seq.items() if x in self.l_csv["sequence_name"]}
         self.g_seq = {x:y for x,y in self.g_seq.items() if x in self.g_csv["sequence_name"]}
+        self.l_snp = {x.id:x for x in snp_aln if x.id in self.l_csv["sequence_name"]}
+        self.g_snp = {x.id:x for x in snp_aln if x.id in self.g_csv["sequence_name"]}
         logger.info ("split data into %s global and %s local sequences", str(self.g_csv.shape[0]), str(self.l_csv.shape[0]))
 
-    def remove_seq_tree_based_on_metadata (self, seqnames = None):
-        # only global sequences are removed 
-        logger.info("removing global sequences after global metadata update")
-        if seqnames is None: # use this variable carefully since it destroys the correspondence 
-            seqnames = self.g_csv["sequence_name"].tolist()
-        newseqs = {x:y for x,y in self.g_seq.items() if x in seqnames}
-        # add all local seqnames to avoid being pruned 
-        seqnames += self.l_csv["sequence_name"].tolist()
+    def remove_seq_tree_based_on_metadata (self, seqnames = None, local = False):
+        if seqnames is not None and local:
+            logger.warning("Removing local sequences selected by hand (i.e. not from metadata update); structure may be compromised")
+        # default is to remove only global sequences
+        if seqnames is None: 
+            if local:
+                logger.info("removing local sequences after metadata update")
+                seqnames = self.l_csv["sequence_name"].tolist()
+            else:
+                logger.info("removing global sequences after global metadata update")
+                seqnames = self.g_csv["sequence_name"].tolist()
+        if local:
+            newseqs = {x:y for x,y in self.l_seq.items() if x in seqnames}
+            newsnps = {x:y for x,y in self.l_snp.items() if x in seqnames}
+            self.usrseqs.update({x:y for x,y in self.l_seq.items() if x not in seqnames})
+            seqnames += self.g_csv["sequence_name"].tolist() # add all global to avoid being pruned 
+        else:
+            newseqs = {x:y for x,y in self.g_seq.items() if x in seqnames}
+            newsnps = {x:y for x,y in self.g_snp.items() if x in seqnames}
+            self.usrseqs.update({x:y for x,y in self.g_seq.items() if x not in seqnames})
+            seqnames += self.l_csv["sequence_name"].tolist() # add all local to avoid being pruned 
         newtrees = []
         for i,t in enumerate(self.trees):
             remove_leaf = []
@@ -163,11 +243,13 @@ class PerobaBackbone:
                 if lab not in seqnames:
                     remove_leaf.append(lab)
             if len(remove_leaf) > 0:
-                logger.warning("In tree id %s, %s leaves were pruned (absent from global metadata)", str(i), str(len(remove_leaf)))
-                newtrees.append(t.extract_tree_without(remove_leaf))
+                logger.warning("In tree id %s, %s leaves were pruned (absent from metadata or list)", str(i), str(len(remove_leaf)))
+                newt = t.extract_tree_without(remove_leaf)
+                if newt.num_nodes(internal=False) > 4: ## number of leaves
+                    newtrees.append(newt)
             else:
                 newtrees.append(t)
-        return  newseqs, newtrees
+        return  newseqs, newsnps, newtrees
 
     def add_trees (self, trees = None):
         if trees is None or len(trees) < 1: return
@@ -189,14 +271,19 @@ class PerobaBackbone:
                 else: # leaf is not in our set
                     remove_leaf.append(lab)
             if len(remove_leaf) > 0:
-                logger.warning("In tree id %s the following leaves were not found and will be pruned:\n%s", str(i), "\n".join(remove_leaf))
+                logger.info("In tree id %s the number of leaves to be pruned is %s", str(i), len(remove_leaf))
+                logger.debug("and they are:\n%s", "\n".join(remove_leaf))
                 self.trees.append(t.extract_tree_without(remove_leaf))
             else:
                 self.trees.append(t)
+        # copy of user-defined trees that don't get pruned
+        self.usrtrees = []
+        for t in self.trees[1:]:
+            self.usrtrees.append( treeswift.read_tree_newick (str(t)) ) ## copy 
 
     def remove_duplicates (self, blocks = 4, leaf_size = 500, radius=0.00001):
         logger.info("Removing duplicates (identical sequences)")
-        clusters = ml.list_duplicates (self.g_seq, blocks, leaf_size, radius)
+        clusters = ml.list_duplicates (self.g_snp, blocks, leaf_size, radius)
 
         df = pd.DataFrame([[y,i] for i,x in enumerate(clusters) for y in x], columns=["sequence_name","peroba_tmp"])
         df = df.sort_values(by=["peroba_tmp"], ascending=True) # same sequence belongs to several clusters
@@ -209,28 +296,124 @@ class PerobaBackbone:
         df = df.groupby("peroba_tmp").aggregate("first") # only one sequence from each cluster, following self.order_col preference
         df.set_index ("peroba_seq_uid", drop = True, inplace = True)
         self.g_csv = df
-        self.g_seqs, self.g_trees = self.remove_seq_tree_based_on_metadata()
+        self.g_seq, self.g_snp, self.trees = self.remove_seq_tree_based_on_metadata()
     
-    def find_neighbours (self, blocks = 2000, leaf_size = 500, dist_blocks = 1, nn = 20):
+    def reduce_redundancy (self, clade_rule = None):
+        if clade_rule is None: # for each lineage level with at least x[0] samples, keep at most x[1]
+            clade_rule = [ # rules can be repeated, for different thresholds; some samples fall into several 
+                    ["lineage",    1, 20], # only those with >1 samples; then take up to 10
+                    ["lineage",   20, 500], # only those with >20 samples; then take up to 500 
+                    ["acc_lineage",1, 50],
+                    ["del_lineage",1, 50],
+                    ["adm1",       5, 500],
+                    ["uk_lineage", 2, 20], 
+                    ["uk_lineage",20, 500], 
+                    ["phylotype",  2, 20]
+                    ] 
+        df = self.g_csv
+        logger.info("Subsampling redundant global samples (i.e. those fom same lineage etc.)") 
+        df = df.sort_values(by=self.sort_cols, ascending=self.sort_ascend)
+        
+        dfcat = None
+        for column, rule1, rule2 in clade_rule:
+            if column in df.columns:
+                # groupby().filter() creates another DF (excluding rows with less than rule1)
+                # therefore a second groupby is needed: groupby().head()
+                df1 = df.groupby(column).filter(lambda x: len(x.index) > rule1).groupby(column).head(rule2)
+                if dfcat is None: dfcat = df1
+                else: dfcat = pd.concat([dfcat, df1])
+        for column in ["lineage", "uk_lineage"]:
+            if column in df.columns:
+                df1 = df[ df[column] == "" ].head(100) 
+                if dfcat is None: dfcat = df1
+                else: dfcat = pd.concat([dfcat, df1])
+
+        self.g_csv = dfcat.groupby(dfcat.index).aggregate("first") # many rows will be duplicated
+        logger.info("After subsampling, global metadata has %s samples", self.g_csv.shape[0])
+        self.g_seq, self.g_snp, self.trees = self.remove_seq_tree_based_on_metadata()
+
+    def remove_low_quality (self, g_acgt = 0.8, l_acgt = 0.6, g_n = 0.1, l_n = 0.2):
+        logger.info(f"Remove global sequences with proportion of ACGT less than  {g_acgt} or proportion of N higher than {g_n}")
+        self.g_csv = self.g_csv.loc[ (self.g_csv["peroba_freq_acgt"] > g_acgt) & (self.g_csv["peroba_freq_n"] < g_n) ]
+        self.g_seq, self.g_snp, self.trees = self.remove_seq_tree_based_on_metadata()
+
+        logger.info(f"Also removing local sequences with proportion of ACGT less than {l_acgt} or proportion of N higher than {l_n}")
+        self.l_csv = self.l_csv.loc[ (self.l_csv["peroba_freq_acgt"] > l_acgt) & (self.l_csv["peroba_freq_n"] < l_n) ]
+        self.l_seq, self.l_snp, self.trees = self.remove_seq_tree_based_on_metadata(local=True)
+        logger.info("After removal, global data has %s samples and local data has %s.", self.g_csv.shape[0], self.l_csv.shape[0])
+
+    def find_neighbours (self, blocks = 1500, leaf_size = 500, dist_blocks = 3, nn = 50):
         logger.info(f"Finding neighbours to local sequences, using a distance of {dist_blocks} to {blocks} segments")
-        neighbours = ml.list_r_neighbours (self.g_seq, self.l_seq, blocks, leaf_size, dist_blocks)
+        neighbours1 = ml.list_r_neighbours (self.g_snp, self.l_snp, blocks, leaf_size, dist_blocks)
        
-        blocks = 2 * blocks; leaf_size = leaf_size/2
+        blocks = 3 * blocks; leaf_size = leaf_size/2
         logger.info("Found %s neighbours; now will find their %s closest neighbours on %s segments", 
-                len(neighbours), str(nn), str(blocks))
-        aln_d = {x:self.g_seq[x] for x in neighbours}
-        neighbours = ml.list_n_neighbours (self.g_seq, aln_d, blocks, leaf_size, nn)
+                len(neighbours1), str(nn), str(blocks))
+        aln_d = {x:self.g_snp[x] for x in neighbours1}
+        neighbours = ml.list_n_neighbours (self.g_snp, aln_d, blocks, leaf_size, nn)
+        neighbours = list(set(neighbours + neighbours1))
         logger.info("Found %s neighbours", len(neighbours))
         return neighbours
 
 def save_global_from_seqnames (bb, seqnames, prefix):
-    seqs, trees = bb.remove_seq_tree_based_on_metadata(seqnames)
+    seqs, snps, trees = bb.remove_seq_tree_based_on_metadata (seqnames)
     save_sequences (seqs, prefix)
     fname = prefix + ".trees.nhx" 
     with open(fname,"w") as fw:
         for t in trees:
-            fw.write(str(t))
-    logger.info(f"Finished saving trees to file {fname}")
+            fw.write(str(t) + "\n")
+    logger.info(f"Finished saving global tree(s) to file {fname}")
+
+def save_user_trees (bb, seqnames, prefix, add_nj_tree = False):
+    logger.info ("Saving user-defined trees with added sequences")
+    leafnames = set([l.get_label() for t in bb.usrtrees for l in t.traverse_leaves()])
+    aln = {x:y for x,y in bb.g_seq.items() if x in leafnames}
+    aln.update({x:y for x,y in bb.l_seq.items() if x in leafnames})
+    aln.update({x:y for x,y in bb.usrseqs.items() if x in leafnames})
+    trees = bb.usrtrees
+
+    if len(aln) < len(leafnames):
+        remove_leaf = [l.get_label() for t in bb.usrtrees for l in t.traverse_leaves() if l.get_label() not in aln.keys()]
+        logger.info("In total %s user-defined leaves do not have a sequence, and will be pruned",str(len(remove_leaf)))
+        logger.debug("And they are\n%s\n", "\t".join(remove_leaf))
+        trees = [t.extract_tree_without(remove_leaf) for t in bb.usrtrees]
+
+    ## add sequences from current analysis (all local plus global neighbours)
+    aln.update({x:y for x,y in bb.g_seq.items() if x in seqnames})
+    aln.update({x:y for x,y in bb.l_seq.items()})
+    save_sequences (aln, prefix)
+    logger.info ("In total, %s sequences form the user-defined data set (from the trees plus the ones found here)",
+            str(len(aln)))
+
+    fname = prefix + ".trees.nhx" 
+    with open(fname,"w") as fw:
+        for t in trees:
+            fw.write(str(t) + "\n")
+        treestring = None
+        if add_nj_tree:
+            logger.info ("Estimating NJ tree with all user-defined sequences")
+            snp_aln = snpsites_from_alignment ([x for x in aln.values()])
+            treestring = rapidnj_from_alignment (snp_aln, n_threads =12)
+            fw.write(treestring + "\n")
+    logger.info(f"Finished saving user-defined trees to file {fname}")
+
+def save_all_sequences (bb, seqnames, prefix, add_nj_tree = True):
+    logger.info ("Saving data set with all local and selected global sequences")
+    ## add sequences from current analysis (all local plus global neighbours)
+    aln = {x:y for x,y in bb.g_seq.items() if x in seqnames}
+    aln.update({x:y for x,y in bb.l_seq.items()})
+    save_sequences (aln, prefix)
+    logger.info ("Total of %s sequences will form the local+global data set", str(len(aln)))
+
+    if add_nj_tree:
+        logger.info ("Estimating NJ tree with local+global sequences")
+        snp_aln  = [x for x in bb.g_snp.values() if x.id in seqnames] # list, not dict
+        snp_aln += [x for x in bb.l_snp.values()]
+        treestring = rapidnj_from_alignment (snp_aln, n_threads =12) # list input, string output
+        fname = prefix + ".trees.nhx" 
+        with open(fname,"w") as fw:
+            fw.write(treestring + "\n")
+        logger.info(f"Finished saving local+global tree to {fname}")
 
 def save_sequences (seqs, prefix):
     fname = prefix + ".aln.xz" 
@@ -273,11 +456,18 @@ def generate_backbone_dataset (database, csv, sequences, trees, replace, prefix)
     # initialisation
     bb = PerobaBackbone (database)
     bb.add_local_data_and_sequences (csv, sequences, replace)
+    bb.finalise_and_split_data_sequences()
     bb.add_trees (trees)
     bb.remove_duplicates()
+    ## these two reduce data set, but ideally should return a copy (TODO)
+    bb.remove_low_quality()
+    bb.reduce_redundancy() 
     # more methods come here
     neighbours = bb.find_neighbours()
-    save_global_from_seqnames (bb, neighbours, prefix + "coguk_NN")
+    # for each method we can use chosen neighbours to save global only or both
+    save_global_from_seqnames (bb, neighbours, prefix + "coguk")
+    save_user_trees (bb, neighbours, prefix + "user", add_nj_tree = True)
+    save_all_sequences (bb, neighbours, prefix + "norw-coguk", add_nj_tree = True)
     # finally, save all NORW sequences
     save_sequences (bb.l_seq, prefix + "norw")
     

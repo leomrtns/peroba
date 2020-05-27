@@ -3,7 +3,7 @@ from Bio import Seq, SeqIO, Align, AlignIO, Alphabet
 from Bio.SeqRecord import SeqRecord
 from Bio.Align import AlignInfo
 import numpy as np
-import datetime, sys, gzip, lzma, bz2, re, subprocess, os, itertools, ete3
+import datetime, sys, gzip, lzma, bz2, re, subprocess, os, itertools, ete3, collections
 
 #from Bio.Phylo import draw, TreeConstruction  #TreeConstruction.DistanceCalculator, TreeConstruction.DistanceTreeConstructor
 #from Bio import Phylo, pairwise2
@@ -154,7 +154,7 @@ def snpsites_from_alignment (sequences = None, strict = False, infile = None, ou
 
     return snps
 
-def rapidnj_from_alignment (sequences = None, infile = None, outfile = None, prefix = "/tmp/", n_threads = 4):
+def rapidnj_from_alignment (sequences = None, infile = None, outfile = None, prefix = "/tmp/", n_threads = 8):
     if (sequences is None) and (infile is None):
         print ("ERROR: You must give me an alignment object or file")
     if prefix is None: prefix = "./"
@@ -167,11 +167,10 @@ def rapidnj_from_alignment (sequences = None, infile = None, outfile = None, pre
     runstr = "rapidnj " + ifl + " -i fa -t d -n -c " + str(n_threads) + " -x " + ofl 
     proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)    
     treestring = open(ofl).readline().rstrip().replace("\'","").replace("\"","").replace("[&R]","")
-    tree = ete3.Tree (treestring)
     if infile is None:  os.system("rm -f " + ifl)
     #else:               os.system("bzip2 -f " + ifl) ## all fasta files shall be bzipped 
     if outfile is None: os.system("rm -f " + ofl)
-    return tree
+    return treestring
 
 def pda_from_tree (tree, infile = None, outfile = None, prefix = "/tmp/", n_remain = 500):
     if (tree is None) and (infile is None):

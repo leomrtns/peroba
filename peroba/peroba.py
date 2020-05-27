@@ -426,7 +426,6 @@ class DataSeqTree:
         if clade_rule is None: # for each lineage level with at least x[0] samples, keep at most x[1]
             clade_rule = { # rules can be repeated, for different thresholds; some samples fall into several 
                     "lineage":[10,3], 
-                    "special_lineage":[3,2], 
                     "uk_lineage":[20,2], 
                     "uk_lineage":[5,1], 
                     "phylotype":[3,1]
@@ -437,7 +436,8 @@ class DataSeqTree:
         
         dfcat = None
         for column, rule in clade_rule.items():
-            df1 = df.groupby(column).filter(lambda x: len(x) > rule[0]).head(rule[1]) 
+         #   df1 = df.groupby(column).filter(lambda x: len(x) > rule[0]).head(rule[1])  ## FIXME: this needs another groupby (corrected below)
+            df1 = df.groupby(column).filter(lambda x: len(x) > rule[0]).groupby(column).head(rule[1]) 
             if dfcat is None: dfcat = df1
             else: dfcat = pd.concat([dfcat, df1])
 

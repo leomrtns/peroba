@@ -36,6 +36,7 @@ def list_duplicates (seq_dict, blocks = 4, leaf_size = 500, radius=0.00001):
     aln = [x for x in seq_dict.values()]
     genome_size = len(aln[0].seq) ## only works for aligned sequences
     block_size = int(genome_size / blocks)
+    if (block_size < 1): block_size = 1
     hashes = [[xxhash.xxh32(str(aln[j].seq[i:i+block_size])).intdigest() for i in range(0,genome_size,block_size)] for j in range(len(aln))]
     btre = BallTree(np.array(hashes), leaf_size=leaf_size, metric='hamming') # create a neighbours tree (KDTree doesnt accept hamming)
     idx = btre.query_radius(hashes, r=radius, return_distance=False) ## return_distace=False makes it faster; r=0.0001 is essentially zero
@@ -48,6 +49,7 @@ def list_r_neighbours (g_seq, l_seq, blocks = 1000, leaf_size = 500, dist_blocks
     l_aln = [x for x in l_seq.values()]
     genome_size = len(g_aln[0].seq) ## only works for aligned sequences
     block_size = int(genome_size / blocks)
+    if (block_size < 1): block_size = 1
     if dist_blocks < 1 : dist_blocks = 1
     dist_blocks += 0.1 # to ensure those within dist are returned (i.e. "<=" and not strictly "<")
     radius = dist_blocks / float(blocks)
@@ -66,6 +68,7 @@ def list_n_neighbours (g_seq, l_seq, blocks = 1000, leaf_size = 200, nn = 10):
     l_aln = [x for x in l_seq.values()]
     genome_size = len(g_aln[0].seq) ## only works for aligned sequences
     block_size = int(genome_size / blocks)
+    if (block_size < 1): block_size = 1
     logger.info("Creating a hashed genome with blocks of %s bases",str(block_size))
     g_hash = [[xxhash.xxh32(str(g_aln[j].seq[i:i+block_size])).intdigest() for i in range(0,genome_size,block_size)] for j in range(len(g_aln))]
     btre = BallTree(np.array(g_hash), leaf_size=leaf_size, metric='hamming') # create a neighbours tree of global sequences
