@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 
-## TODO: "UNKNOWN SOURCE" and "UNKNOWN" are the same adm2 (in cog)
+## nabil's needed columns: peroba_uk_lineage  peroba_lineage peroba_phylotype  peroba_special_lineage central_sample_id
+
+## TODO: "UNKNOWN SOURCE" and "UNKNOWN" are the same adm2 (in cog) (fixed in backbone)
+## TODO: columns w/ values in csv but not metadata (e.g. adm_private or this week's) may not ASreconstructed
+## (not merged?)
+
 
 import logging, ete3
 import numpy as np, pandas as pd
@@ -27,7 +32,9 @@ suffix = {
         }
         
 #asr_cols = ["adm2", "uk_lineage", "lineage", "phylotype", "submission_org_code", "date_sequenced", "source_age", "source_sex", "collecting_org", "ICU_admission"]
-asr_cols = ["adm2", "uk_lineage", "lineage", "phylotype", "adm2_private"] ## special_lineage dissapeared in 2020.05.22
+asr_cols = ["uk_lineage", "lineage", "phylotype"] # whatever is here goes to master sheet and comes back without peroba next week
+remove_from_master_cols = ["uk_lineage", "lineage", "phylotype", "special_lineage", "acc_lineage", "del_lineage"]
+
 
 def read_ete_treefile (treefile, multi = None):
     if multi is None: 

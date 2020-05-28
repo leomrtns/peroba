@@ -10,6 +10,8 @@ import phylodrawing as phylo
 import statsdrawing as stdraw
 import common
 
+
+## FROM NABIL, this must be present: peroba_uk_lineage    peroba_lineage    peroba_phylotype    peroba_special_lineage  central_sample_id
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False
 stream_log = logging.StreamHandler()
@@ -20,6 +22,8 @@ logger.addHandler(stream_log)
 
 cwd = os.getcwd()
 template_dir = os.path.join( os.path.dirname(os.path.abspath(__file__)), "../report")
+
+## FIXME : I must destroy UK lineage etc from CSV (since I imputed it!)
 
 #outdir = os.path.join(cwd, args.outdir)
 
@@ -86,7 +90,12 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
     ## local csv may contain info on rejected samples (e.g. as 2020.05.12 there are 
     ## 452 rows but only 302 sequences, since 150 were not sequenced yet or QC rejected)
     metadata = metadata0.copy() ## to make sure we don't modify global metadata 
+
+    remove_cols = [c for c in common.remove_from_master_cols if c in csv0.columns]  ## imputed values from previous iteration
+    if len(remove_cols):
+        csv0.drop (labels = remove_cols, axis=1, inplace = True) 
     csv = csv0.copy()
+
     matched = metadata[ metadata["central_sample_id"].isin(csv.index) ] # index of csv is "central_sample_id"
     csv["submission_org_code"] = "NORW"
     csv["submission_org"] = "Norwich"
@@ -95,16 +104,18 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
     seqs_not_in_tree = dict()  ## NORW sequences that should be in tree but are not
     # change leaf names whenever possible (i.e. they match to 'official' COGUK long names)
     for shortname, longname  in zip(matched["central_sample_id"], matched["sequence_name"]):
-        if shortname in leaf_names:
+        if shortname in leaf_names: # leaf_names is a list; if x in y means x==z for some z in y (!= 'A' in 'ZAPPA')
             tree_leaves[str(shortname)].name = longname # leaf names E9999 --> England/E9999/2020
         else:
-            seqs_not_in_tree[str(shortname)] = longname
+            if longname not in leaf_names: 
+                seqs_not_in_tree[str(shortname)] = longname
     tree_leaves = {(leaf.name):leaf for leaf in tree.iter_leaves()} # dict {leaf_str_name: ete3_node}
     leaf_names = set (leaf_names + [x for x in tree_leaves.keys()]) # update with new leaf names (from COGUK)
 #    norwseqnames = [x.id for x in seq_matrix]
     if len(seqs_not_in_tree):
-        tbl_warning = [f"[WARNING]\t{x}\t{y}" for x,y in seqs_not_in_tree.items()]
-        logger.warning("Samples from NORW not found on tree (excluded from phylo analysis due to low quality perhaps?):\n%s", "\n".join(tbl_warning))
+        tbl_debug = [f"[DEBUG]\t{x}\t{y}" for x,y in seqs_not_in_tree.items()]
+        logger.warning("%s\tsamples from NORW in metadata were not found on tree (excluded from analysis due to low quality?)", len(tbl_debug))
+        logger.debug("And the sequences are\n%s", "\n".join(tbl_debug))
 
     # remove csv rows not present in tree
     csv = csv[ csv.index.isin(leaf_names) ]
@@ -168,7 +179,7 @@ def merge_original_with_extra_cols (csv_original, metadata):
     df = df.merge(csv_original, on="central_sample_id")
     return df  ## no csv_original were harmed in this function
 
-def prepare_report_files (metadata, csv, tree, tree_leaves, input_dir, output_dir, title_date):
+def main_prepare_report_files (metadata0, csv0, tree, tree_leaves, input_dir, output_dir, title_date):
     mkd_file_name = os.path.join(output_dir,f"report_{title_date}.md")
     pdf_file_name = os.path.join(output_dir,f"report_{title_date}.pdf")
     csv_file_name = os.path.join(output_dir,f"csv_{title_date}.csv.gz")
@@ -207,13 +218,12 @@ geometry:
     report_fw = open (mkd_file_name, "w")
     report_fw.write(md_description)
 
-    ## prepare data (merging, renaming)
-    csv_original = csv.copy()
-    metadata, csv, tree, tree_leaves = merge_metadata_with_csv (metadata, csv, tree, tree_leaves)
+    ## prepare data (merging, renaming) csv0 WILL BE MODIFIED to remove columns from prev week
+    metadata, csv, tree, tree_leaves = merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves)
     ## start plotting 
     md_description, csv = plot_over_clusters (csv, tree, min_cluster_size = 4, output_dir=output_dir)
     metadata = phylo.save_metadata_inferred (metadata, tree)
-    csv = merge_original_with_extra_cols (csv_original, metadata)
+    csv = merge_original_with_extra_cols (csv0, metadata)
     csv.to_csv (csv_file_name)
     metadata.to_csv (meta_file_name)
 
@@ -279,7 +289,7 @@ def main():
         logger.warning("Found duplicated leaf names in input treefile, will keep one at random")
     logger.info("%s leaves in treefile and metadata with shape %s", len(tree_leaves), str(metadata.shape))
 
-    markdown_text = prepare_report_files (metadata, csv, tree, tree_leaves, input_d, output_d, title_date)
+    main_prepare_report_files (metadata, csv, tree, tree_leaves, input_d, output_d, title_date)
 
 
 if __name__ == '__main__':
