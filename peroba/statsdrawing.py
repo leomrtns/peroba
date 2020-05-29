@@ -21,7 +21,7 @@ stream_log.setLevel(logging.DEBUG)
 logger.addHandler(stream_log)
     
 seaborn_rc = {"figure.dpi":300, "font.size":8, "axes.titlesize":8,"axes.labelsize":8, "xtick.labelsize":6, "ytick.labelsize":6}  
-uk_postcode_area_file = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/UKpostcodeAreas")  
+uk_postcode_area_file = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/UKpostcodeDistricts")  
 
 def generate_time_heatmap (df0, date_col = None, group_col = None, use_max = True, label_interval = None):
     if date_col is None: date_col = "collection_date"
@@ -125,8 +125,8 @@ def plot_genomes_sequenced_over_time (metadata, output_dir):
     x = g.set_xticklabels (x, rotation=30, horizontalalignment='right', fontweight='light')
     
     md_description = """
-## Genomes sequenced at the QIB considered here PLEASE DO NOT USE 
-These counts may **not** be the total sums, they are based on a merged database that removes duplicates (some samples
+## Genomes sequenced at the QIB considered here 
+These counts are **not** the total sums, since they are based on the database that removes duplicates (some samples
 were lost?) 
 And this is still work-in-progress
 """
@@ -153,7 +153,7 @@ def plot_jitter_lineages (metadata, output_dir=None):
     #x = g.set_xticklabels ([1,2,3, 30])
     ## see also https://www.machinelearningplus.com/plots/top-50-matplotlib-visualizations-the-master-plots-python/
     md_description = """
-## PLEASE DO NOT USE 
+## Lineages over time
 
 """
     md_description += "\n<br>![](jitter_lineages.pdf)\n<br>\n" # same directory as report.md, it doesn't need full path? 
@@ -188,34 +188,39 @@ def plot_postcode_map (metadata, counter, output_dir):
     df=metadata.copy()
 
     # counts = df.groupby(["adm2_private","peroba_lineage"]).size().unstack() # 2D: order is [rows, columns]
-    casecounts = df.groupby(["adm2_private"]).size() # 1D: just counts per postcode (Series, not DataFrame)
+    ## casecounts is 1D: just counts per postcode (Series, not DataFrame) therefore we create a DF with column *name*
+    casecounts = df.groupby(["adm2_private"]).size().to_frame(name="cnt") 
     casecounts.fillna(0, inplace=True)
-    print (counter, casecounts)
+    casecounts.reset_index(drop=False, inplace=True)
+    casecounts.rename(columns={"adm2_private":"area"},inplace=True)
 
     ## prepare geographical lines (land/sea etc.)
     fig, ax = plt.subplots(nrows=1, ncols=1,figsize=(5,5)) # I'm leaving ax in case we want several plots
     fig.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=None)
     m = Basemap(resolution='h', projection='merc', lat_0=54.5, lon_0=-4.36, ax=ax,
-                llcrnrlon=-2.1, llcrnrlat= 51, urcrnrlon=1.8, urcrnrlat=53.5)
+             llcrnrlon=-1.9, llcrnrlat= 51.3, urcrnrlon=1.8, urcrnrlat=53.2)
     m.drawmapboundary(fill_color='aliceblue') ## fillcolor is ocean; 'lake' below are... lakes!
     m.fillcontinents(color='#ffffff',lake_color='aliceblue')
     m.drawcoastlines()
 
     # postcode polygons (TODO: merge with NUTS2 polygons)
     m.readshapefile(uk_postcode_area_file, 'areas') # Areas.shp 
-    df_poly = pd.DataFrame({
+    poly = pd.DataFrame({
             'shapes': [patches.Polygon(np.array(shape), True) for shape in m.areas],
             'area': [area['name'] for area in m.areas_info]
         })
+    poly = poly.merge(casecounts, on="area", how="left")
+    print (counter, poly)
+
     cmap = plt.get_cmap('Oranges')   
-    pc = PatchCollection(df_poly.shapes, zorder=2)
+    pc = PatchCollection(poly.shapes, zorder=2)
     norm = colors.Normalize()
 
-    pc.set_facecolor(cmap(norm(casecounts.values)))
+    pc.set_facecolor(cmap(norm(poly["cnt"].fillna(0).values)))
     ax.add_collection(pc)
     ax.set_title(counter)
     mapper = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
-    mapper.set_array(casecounts)
+    mapper.set_array(poly["cnt"])
     plt.colorbar(mapper, shrink=0.5, ax=ax)
 
     md_description = f"\n![map{counter}]({fname})\n<br>\n"
