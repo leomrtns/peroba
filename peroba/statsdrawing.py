@@ -2,7 +2,10 @@
 import matplotlib
 matplotlib.use('Agg') # first rule to prevent system of chosing X11-based
 import matplotlib.pyplot as plt
-from matplotlib import rcParams, cm, colors # colormap
+from matplotlib import rcParams, cm, colors, patches
+from mpl_toolkits.basemap import Basemap  # patches.Polygon, colors.Normalize
+from matplotlib.collections import PatchCollection ## import collections may clash with collections.Counter one 
+
 import logging, ete3, argparse
 import numpy as np, pandas as pd, seaborn as sns
 from sklearn import manifold, metrics, cluster, neighbors, decomposition, preprocessing
@@ -18,6 +21,7 @@ stream_log.setLevel(logging.DEBUG)
 logger.addHandler(stream_log)
     
 seaborn_rc = {"figure.dpi":300, "font.size":8, "axes.titlesize":8,"axes.labelsize":8, "xtick.labelsize":6, "ytick.labelsize":6}  
+uk_postcode_area_file = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/UKpostcodeAreas")  
 
 def generate_time_heatmap (df0, date_col = None, group_col = None, use_max = True, label_interval = None):
     if date_col is None: date_col = "collection_date"
@@ -179,3 +183,42 @@ def plot_bubble_per_cluster (metadata, counter, output_dir):
     g.figure.clf()
     return md_description
 
+def plot_postcode_map (metadata, counter, output_dir):
+    fname = f"map{counter}.pdf"
+    df=metadata.copy()
+
+    # counts = df.groupby(["adm2_private","peroba_lineage"]).size().unstack() # 2D: order is [rows, columns]
+    casecounts = df.groupby(["adm2_private"]).size() # 1D: just counts per postcode (Series, not DataFrame)
+    casecounts.fillna(0, inplace=True)
+    print (counter, casecounts)
+
+    ## prepare geographical lines (land/sea etc.)
+    fig, ax = plt.subplots(nrows=1, ncols=1,figsize=(5,5)) # I'm leaving ax in case we want several plots
+    fig.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=None)
+    m = Basemap(resolution='h', projection='merc', lat_0=54.5, lon_0=-4.36, ax=ax,
+                llcrnrlon=-2.1, llcrnrlat= 51, urcrnrlon=1.8, urcrnrlat=53.5)
+    m.drawmapboundary(fill_color='aliceblue') ## fillcolor is ocean; 'lake' below are... lakes!
+    m.fillcontinents(color='#ffffff',lake_color='aliceblue')
+    m.drawcoastlines()
+
+    # postcode polygons (TODO: merge with NUTS2 polygons)
+    m.readshapefile(uk_postcode_area_file, 'areas') # Areas.shp 
+    df_poly = pd.DataFrame({
+            'shapes': [patches.Polygon(np.array(shape), True) for shape in m.areas],
+            'area': [area['name'] for area in m.areas_info]
+        })
+    cmap = plt.get_cmap('Oranges')   
+    pc = PatchCollection(df_poly.shapes, zorder=2)
+    norm = colors.Normalize()
+
+    pc.set_facecolor(cmap(norm(casecounts.values)))
+    ax.add_collection(pc)
+    ax.set_title(counter)
+    mapper = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
+    mapper.set_array(casecounts)
+    plt.colorbar(mapper, shrink=0.5, ax=ax)
+
+    md_description = f"\n![map{counter}]({fname})\n<br>\n"
+    fig.savefig(os.path.join(output_dir,fname), format="pdf")  # or plt.savefig()
+    fig.clf()
+    return md_description

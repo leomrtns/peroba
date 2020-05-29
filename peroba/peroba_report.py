@@ -51,12 +51,13 @@ Only clusters with more than {minc_size} elements are shown.
     for i,(c,t) in enumerate(zip(sub_csv,sub_tree)):
         if len(c) > min_cluster_size:
             md_description += f"\n### Cluster {i}\n"
-            this_description = phylo.plot_single_cluster (c, t, i, ts, output_dir)
-            md_description += this_description
-            this_description = stdraw.plot_bubble_per_cluster (c, i, output_dir)
-            md_description += this_description
-            this_description = stdraw.plot_time_heatmap (c, i, output_dir)
-            md_description += this_description
+            md_description += phylo.plot_single_cluster (c, t, i, ts, output_dir)
+
+            md_description += stdraw.plot_bubble_per_cluster (c, i, output_dir)
+            
+            md_description += stdraw.plot_time_heatmap (c, i, output_dir)
+            
+            md_description += stdraw.plot_postcode_map (c, i, output_dir)
 
     md_description += """
 
