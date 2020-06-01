@@ -32,7 +32,7 @@ def tex_formattted_string (string): # YAML header is translated into latex by pa
 
 def plot_over_clusters (csv, tree, min_cluster_size = None, output_dir=None):
     if output_dir is None: output_dir = cwd
-    if min_cluster_size is None: min_cluster_size = 2
+    if min_cluster_size is None: min_cluster_size = 5
     df = csv.copy()
     clist = ["adm2", "peroba_lineage", "peroba_uk_lineage"]
     cname = ["Administration", "Lineages", "UK lineage"]
@@ -215,6 +215,13 @@ geometry:
 """.format(title_date = title_date, 
             titlepage=tex_formattted_string(titlepage_name), # protects from YAML substitution 
             pagebackground=tex_formattted_string(pagebackground_name))
+## for landscape (use \blscape and /elscape within markdown, however it rotates layout (header, footer)
+#header-includes: |
+#    \usepackage{pdflscape}
+#    \newcommand{\blscape}{\begin{landscape}}                                                                                                                  
+#    \newcommand{\elscape}{\end{landscape}} 
+#...
+#\blscape 
 
     report_fw = open (mkd_file_name, "w")
     report_fw.write(md_description)
@@ -222,7 +229,7 @@ geometry:
     ## prepare data (merging, renaming) csv0 WILL BE MODIFIED to remove columns from prev week
     metadata, csv, tree, tree_leaves = merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves)
     ## start plotting 
-    md_description, csv = plot_over_clusters (csv, tree, min_cluster_size = 4, output_dir=output_dir)
+    md_description, csv = plot_over_clusters (csv, tree, min_cluster_size = 5, output_dir=output_dir)
     metadata = phylo.save_metadata_inferred (metadata, tree)
     csv = merge_original_with_extra_cols (csv0, metadata)
     csv.to_csv (csv_file_name)
@@ -233,7 +240,10 @@ geometry:
     report_fw.write(md_description)
     md_description = stdraw.plot_genomes_sequenced_over_time (metadata, output_dir)
     report_fw.write(md_description)
-    
+
+    #md_description = "\n\end{pdflscape}"
+    #report_fw.write(md_description)
+
     report_fw.close()
 
     runstr = f"cd {output_dir} && pandoc {mkd_file_name} -o {pdf_file_name} --from markdown --template {pandoc_template_name} --listings"

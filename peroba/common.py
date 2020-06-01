@@ -1,7 +1,8 @@
-#!/usr/bin/env python
+import matplotlib
+import matplotlib.pyplot as plt
+from matplotlib import rcParams, cm, colors, patches
 
 ## nabil's needed columns: peroba_uk_lineage  peroba_lineage peroba_phylotype  peroba_special_lineage central_sample_id
-
 ## TODO: "UNKNOWN SOURCE" and "UNKNOWN" are the same adm2 (in cog) (fixed in backbone)
 ## TODO: columns w/ values in csv but not metadata (e.g. adm_private or this week's) may not ASreconstructed
 ## (not merged?)
@@ -225,3 +226,18 @@ def add_sequence_counts_to_metadata (metadata, sequences, from_scratch = None):
 
     return metadata, sequences
 
+def transparent_cmap(color=None, cmap=None, final_alpha=None):
+  # http://stackoverflow.com/questions/10127284/overlay-imshow-plots-in-matplotlib
+  if color is None:
+    color = "blue"
+  if (final_alpha is None) or (final_alpha < 0.01):
+    final_alpha = 1.
+  if cmap:
+    mycmap = plt.get_cmap(cmap)
+  else:
+    from matplotlib.colors import colorConverter
+    mycmap = matplotlib.colors.LinearSegmentedColormap.from_list('my_cmap', [colorConverter.to_rgba(color),colorConverter.to_rgba(color)],256)
+
+  mycmap._init() # create the _lut array, with rgba values
+  mycmap._lut[:,-1] = np.linspace(0, final_alpha, mycmap.N+3) # here it is progressive alpha array
+  return mycmap

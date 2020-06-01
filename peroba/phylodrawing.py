@@ -269,12 +269,13 @@ def plot_single_cluster (csv, tree, counter, ts = None, output_dir=None):
     exclude = [x for x in csv.columns if x in exclude]
 
     fname = f"tree{counter}.pdf"
-    md_description = ""
     df = csv.drop (labels = exclude, axis=1)
     df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
     
     tree.render(os.path.join(output_dir,fname), w=800, tree_style=ts)
-    md_description += f"\n![tree{counter}]({fname})\n<br>\n"
+
+    caption = f"Tree of cluster {counter}, with red branches connecting samples sequenced in NORW."
+    md_description = f"\n![{caption}]({fname})\n\n"
     # report_md += df.to_html(max_rows=4, max_cols=20)
     # report_md += "<hr>\n"
 
