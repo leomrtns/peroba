@@ -258,6 +258,10 @@ def continuous_cmap (cmap = None, list_size = None):
     """
     if cmap is None: cmap = "plasma"
     if list_size is None: list_size = 0
+    randsets = [["F26440", "D4A0A7", "8FD5A6", "599B6C", "77A4BB", "EFC69B", "B1B7D1", "F6AA1C"], # four handcrafted palletes
+                ["D8C99B", "FE938C", "99B2DD", "FFF9A5", "BAD8B6", "888098", "CACCC1", "5385AA"],
+                ["C48983", "666822", "E9CEBA", "56AACC", "FFBD44", "729FA4", "8C693C", "831F46"],
+                ["AE8EAF", "86927D", "E6B89C", "fed611", "73bfb8", "B1B695", "fef5ae", "BB9457"]]
     ncls = {'Pastel1':9, 'Pastel2':8, 'Paired':12, 'Accent':8,'Dark2':8, 'Set1':9, 
             'Set2':8, 'Set3':12,'tab10':10, 'tab20':20, 'tab20b':20, 'tab20c':20}
     custom_cmap = cm.get_cmap(cmap)
