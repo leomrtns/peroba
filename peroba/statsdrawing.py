@@ -39,7 +39,6 @@ def generate_time_heatmap (df0, date_col = None, group_col = None, use_max = Tru
 #    df["date"] = pd.to_datetime(df[date_col], infer_datetime_format=True, yearfirst=True, errors='coerce')
     df["date"] = df[date_col]
     df.dropna(subset=["date"], inplace=True)
-    print (df[df["date"] < datetime.datetime(2020, 1, 2)])
     ## see also df.pivot(a,b,c) which takes df with cols a,b,c and create axb matrix with c values
     df = df.groupby(["date","group"]).size().unstack() ## real one will use cluster_id, not adm 
 
@@ -354,6 +353,7 @@ def plot_postcode_map (metadata, counter, output_dir):
     mapper.set_array(poly["cnt"])
     plt.colorbar(mapper, shrink=0.5, ax=ax)
     plt.gcf().set_rasterized(True)
+    fig.tight_layout()
     fig.savefig(os.path.join(output_dir,fname), format="pdf", dpi=(400))  # or plt.savefig()
     fig.clf()
     
