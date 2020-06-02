@@ -33,7 +33,11 @@ suffix = {
         }
         
 #asr_cols = ["adm2", "uk_lineage", "lineage", "phylotype", "submission_org_code", "date_sequenced", "source_age", "source_sex", "collecting_org", "ICU_admission"]
-asr_cols = ["uk_lineage", "lineage", "phylotype"] # whatever is here goes to master sheet and comes back without peroba next week
+
+# For nabil, these must be on our output csv: peroba_uk_lineage    peroba_lineage    peroba_phylotype    peroba_special_lineage  central_sample_id
+# therefore these go to master sheet and come back without "peroba_" on following week
+asr_cols = ["uk_lineage", "lineage", "phylotype"]  
+# therefore we exclude the following columns from local (a.k.a. master table), since these must be from global metadata if present
 remove_from_master_cols = ["uk_lineage", "lineage", "phylotype", "special_lineage", "acc_lineage", "del_lineage"]
 
 
@@ -131,18 +135,24 @@ def df_read_genome_metadata (filename, primary_key = "sequence_name", rename_dic
         df1.rename_axis(str(index_name), inplace = True) # equiv. to df.index.name="peroba_seq_uid"
     else:
         df1.set_index (str(index_name), drop = True, inplace = True) # drop the column to avoid having both with same name
-
+    
+    if "collection_date" in df1.columns: ## keep most recent first (in case one has wrong date)
+        df1["collection_date"] = pd.to_datetime(df1["collection_date"], infer_datetime_format=True, yearfirst=True, errors='coerce')
+        df1.sort_values(by=["collection_date"], inplace = True, ascending=False)
+    
     if "adm2" in df1.columns:
         df1['adm2'] = df1['adm2'].str.title()
     df1 = df1.groupby(df1.index).aggregate("first"); # duplicated indices are allowed in pandas
     return df1
 
-def df_merge_metadata_by_index (df1, df2): # merge by replacing NA whenever possible, using INDEX
-    df1 = df1.combine_first(df2)
-    df1 = df2.combine_first(df1)
+def df_merge_metadata_by_index (df1, df2): # replaces NA whenever possible, using INDEX, and adds new columns from df2
+    df2 = df2.combine_first(df1) # adds df1 columns; df1 informs missing values 
+    df1 = df1.combine_first(df2) # improved df2 thus fills missing values from df1
+    if "collection_date" in df1.columns: ## GISAID sometimes have old (i.e. missing) datetime from coguk
+        df1.sort_values(by=["collection_date"], inplace = True, ascending=False) 
     # if before combine_first() there were dups they're kept by pandas
     df1 = df1.groupby(df1.index).aggregate("first"); 
-    df1.sort_index(inplace=True)
+    #df1.sort_index(inplace=True)
     return df1
 
 def df_finalise_metadata (df, exclude_na_rows = None, exclude_columns = "default", remove_duplicate_columns = True):
@@ -154,8 +164,9 @@ def df_finalise_metadata (df, exclude_na_rows = None, exclude_columns = "default
         exclude_columns = ["is_travel_history","is_surveillance","is_hcw", "is_community", "outer_postcode", "travel_history"]
 
     # df['days_since_Dec19'] = df['collection_date'].map(lambda a: get_days_since_2019(a, impute = True)) ## not here
-    df["collection_datetime"] = pd.to_datetime(df["collection_date"], infer_datetime_format=False, errors='coerce')
-    cols = [x for x in ['lineage_support', 'collection_datetime'] if x in df.columns]
+    # df['days_since_Dec19'] = df['collection_date'].map(lambda a: datetime.datetime(a) - datetime.datetime(2019,12, 1).days) 
+    df["collection_date"] = pd.to_datetime(df["collection_date"], infer_datetime_format=True, yearfirst=True, errors='coerce')
+    cols = [x for x in ['lineage_support', 'collection_date'] if x in df.columns]
     df = df.sort_values(by=cols, ascending=False)
     
     ## CURRENTLY NOT WORKING since sequence_name was used as primary key... 
@@ -226,7 +237,7 @@ def add_sequence_counts_to_metadata (metadata, sequences, from_scratch = None):
 
     return metadata, sequences
 
-def transparent_cmap(color=None, cmap=None, final_alpha=None):
+def transparent_cmap (color=None, cmap=None, final_alpha=None):
   # http://stackoverflow.com/questions/10127284/overlay-imshow-plots-in-matplotlib
   if color is None:
     color = "blue"
@@ -241,3 +252,18 @@ def transparent_cmap(color=None, cmap=None, final_alpha=None):
   mycmap._init() # create the _lut array, with rgba values
   mycmap._lut[:,-1] = np.linspace(0, final_alpha, mycmap.N+3) # here it is progressive alpha array
   return mycmap
+
+def continuous_cmap (cmap = None, list_size = None):
+    """ if list_size is not null, returns a list of this size with colours from cmap; otherwise return the cmap
+    """
+    if cmap is None: cmap = "plasma"
+    if list_size is None: list_size = 0
+    ncls = {'Pastel1':9, 'Pastel2':8, 'Paired':12, 'Accent':8,'Dark2':8, 'Set1':9, 
+            'Set2':8, 'Set3':12,'tab10':10, 'tab20':20, 'tab20b':20, 'tab20c':20}
+    custom_cmap = cm.get_cmap(cmap)
+    if cmap in ncls.keys():
+        custom_cmap = colors.LinearSegmentedColormap.from_list("custom", [(x,custom_cmap(x)) for x in np.linspace(0, 1, ncls[cmap])])
+    if list_size == 0:
+        return custom_cmap
+    return custom_cmap(np.linspace(0, 1, list_size))
+

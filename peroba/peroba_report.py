@@ -11,7 +11,6 @@ import statsdrawing as stdraw
 import common
 
 
-## FROM NABIL, this must be present: peroba_uk_lineage    peroba_lineage    peroba_phylotype    peroba_special_lineage  central_sample_id
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False
 stream_log = logging.StreamHandler()
@@ -45,9 +44,11 @@ Only clusters with more than {minc_size} elements are shown.
     sub_csv, sub_tree, this_description, csv = phylo.ASR_subtrees (csv, tree)
     md_description += this_description
 
+    logger.info("Decorating tree before plotting all clusters")
     colmap_dict = phylo.colormap_from_dataframe (csv, column_list = clist, column_names=cname)
     ts = phylo.return_treestyle_with_columns (colmap_dict)
 
+    logger.info("Entering loop over clusters found; sit tight!")
     for i,(c,t) in enumerate(zip(sub_csv,sub_tree)):
         if len(c) > min_cluster_size:
             md_description += f"\n### Cluster {i}\n"
@@ -139,8 +140,10 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
     csv.set_index (metadata.index.names, drop = True, inplace = True) # drop to avoid an extra 'peroba_seq_uid' column
     # merge with COGUK 
     csv = common.df_merge_metadata_by_index (csv, metadata) 
-    csv['days_since_Dec19'] = csv['collection_date'].map(lambda a: get_days_since_2019(a, impute = True))
-    csv["collection_date"] = pd.to_datetime(csv["collection_date"], infer_datetime_format=False, errors='coerce')
+
+    csv["collection_date"] = pd.to_datetime(csv["collection_date"], infer_datetime_format=True, yearfirst=True, errors='coerce')
+    #csv['days_since_Dec19'] = csv['collection_date'].map(lambda a: get_days_since_2019(a, impute = False))
+    csv['days_since_Dec19'] = csv['collection_date'].map(lambda a: (a - datetime.datetime(2019,12, 1)).days) 
 
     # remove all rows not present in tree
     csv = csv[ csv.index.isin(leaf_names) ]
@@ -153,9 +156,10 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
         id_meta = set(csv.index.array) # <PandasArray> object, works like an np.array
         id_leaves = set([x for x in tree_leaves.keys()]) 
         only_in_tree = list(id_leaves - id_meta)
-        logger.warning("Unmapped leaves:\n%s", "\n".join(only_in_tree))
+        logger.warning("Removing unmapped leaves from dictionary. List of unmapped leaves:\n%s", "\n".join(only_in_tree))
         for i in only_in_tree:
             del tree_leaves[i]
+        logger.info("Will now prune these leaves from tree.")
         tree.prune([node for node in tree_leaves.values()], preserve_branch_length=True) # or leafnames, but fails on duplicates
 
     logger.info("Comparing tree leaves to check for duplicates")
@@ -170,7 +174,7 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
 
     logger.info("Merging metadata files by sequence name, after renaming local sequences when possible")
     metadata0 = common.df_merge_metadata_by_index (csv, metadata0) 
-    metadata0["collection_date"] = pd.to_datetime(metadata0["collection_date"], infer_datetime_format=False, errors='coerce')
+    metadata0["collection_date"] = pd.to_datetime(metadata0["collection_date"], infer_datetime_format=True, yearfirst=True, errors='coerce')
     return metadata0, csv, tree, tree_leaves
 
 def merge_original_with_extra_cols (csv_original, metadata):
@@ -229,7 +233,7 @@ geometry:
     ## prepare data (merging, renaming) csv0 WILL BE MODIFIED to remove columns from prev week
     metadata, csv, tree, tree_leaves = merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves)
     ## start plotting 
-    md_description, csv = plot_over_clusters (csv, tree, min_cluster_size = 5, output_dir=output_dir)
+    md_description, csv = plot_over_clusters (csv, tree, min_cluster_size = 10, output_dir=output_dir)
     metadata = phylo.save_metadata_inferred (metadata, tree)
     csv = merge_original_with_extra_cols (csv0, metadata)
     csv.to_csv (csv_file_name)
@@ -301,7 +305,6 @@ def main():
     logger.info("%s leaves in treefile and metadata with shape %s", len(tree_leaves), str(metadata.shape))
 
     main_prepare_report_files (metadata, csv, tree, tree_leaves, input_d, output_d, title_date)
-
 
 if __name__ == '__main__':
     main()

@@ -30,7 +30,7 @@ prefsort = [
     [ "adm2", True],
     [ "country", True],
     [ 'lineage_support', False],
-    [ 'collection_datetime', False] 
+    [ 'collection_date', False] 
     ]
 
 # keys will be categorical columns, values are in order of preference
@@ -61,7 +61,7 @@ class PerobaBackbone:
     # subset of columns from that may be useful (drop others)
     cols = ["sequence_name", "central_sample_id", "submission_org_code", "submission_org", "collection_datetime", 
             "adm0", "adm1", "adm2", "acc_lineage", "del_lineage",  
-            "collection_date", "country" , "cov_id", "sequencing_org", "sequencing_org_code", "sequencing_submission_date",
+            "country" , "cov_id", "sequencing_org", "sequencing_org_code", "sequencing_submission_date",
             "lineage", "lineage_support", "special_lineage","uk_lineage", "phylotype",
             "peroba_freq_acgt", "peroba_freq_n", "peroba_seq_uid", "source_age", "source_sex", ## until here  from global, below is local
             "adm2_private", "Repeat Sample ID", "icu_admission", "PCR Ct value", "No. Reads", "Mapped Reads", 

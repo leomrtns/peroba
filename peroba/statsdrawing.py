@@ -6,12 +6,16 @@ from matplotlib import rcParams, cm, colors, patches
 from mpl_toolkits.basemap import Basemap  # patches.Polygon, colors.Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.collections import PatchCollection ## import collections may clash with collections.Counter one 
+import geopandas as gpd
+import shapely.geometry ## patchcollection doesnt understand geopandas geometry
+import warnings
 
 import logging, ete3, argparse
 import numpy as np, pandas as pd, seaborn as sns
 from sklearn import manifold, metrics, cluster, neighbors, decomposition, preprocessing
 #import skbio, parasail, dendropy, datetime, time, codecs, joypy
-import sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib
+import sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib, datetime
+
 
 logger = logging.getLogger(__name__)
 logger.propagate = False
@@ -22,14 +26,20 @@ stream_log.setLevel(logging.DEBUG)
 logger.addHandler(stream_log)
     
 seaborn_rc = {"figure.dpi":300, "font.size":8, "axes.titlesize":8,"axes.labelsize":8, "xtick.labelsize":6, "ytick.labelsize":6}  
-uk_postcode_area_file = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/UKpostcodeDistricts")  
+# basemap needs {dbf,fix,shp,prj, shx} files so suffix excluded, while geopandas needs just the shp file
+uk_postcode_area_file = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/UKpostcodeDistricts") 
+uk_gadm_nuts2_file = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/gadm36_GBR_2") 
+
 
 def generate_time_heatmap (df0, date_col = None, group_col = None, use_max = True, label_interval = None):
     if date_col is None: date_col = "collection_date"
     if group_col is None: group_col = "peroba_uk_lineage"
     df = df0.copy()
     df["group"] = df[group_col].str.split('/').str[0]
-    df["date"] = pd.to_datetime(df[date_col], infer_datetime_format=False, errors='coerce')
+#    df["date"] = pd.to_datetime(df[date_col], infer_datetime_format=True, yearfirst=True, errors='coerce')
+    df["date"] = df[date_col]
+    df.dropna(subset=["date"], inplace=True)
+    print (df[df["date"] < datetime.datetime(2020, 1, 2)])
     ## see also df.pivot(a,b,c) which takes df with cols a,b,c and create axb matrix with c values
     df = df.groupby(["date","group"]).size().unstack() ## real one will use cluster_id, not adm 
 
@@ -158,7 +168,8 @@ def new_date_column_with_jitter (df0, original_date_col = None, new_date_col = N
     if original_date_col is None: original_date_col = "collection_date"
     if label_interval is None: label_interval = 7 #  once every week
     tmp_col = new_date_col + "TMP"
-    df[tmp_col] = pd.to_datetime(df0[original_date_col], infer_datetime_format=False, errors='coerce')
+    #df[tmp_col] = pd.to_datetime(df0[original_date_col], infer_datetime_format=True, yearfirst=True, errors='coerce')
+    df[tmp_col] = df0[original_date_col]
     df[new_date_col] = ((df[tmp_col] - df[tmp_col].min())/np.timedelta64(1, 'D')).astype(float) +  np.random.uniform(-0.35,0.35, len(df[tmp_col]))
     # below is WRONG since the x-axis does NOT follow table order!
     labs = ["" if i%label_interval else a for i,a in enumerate(df[tmp_col].dt.strftime('%Y-%m-%d'))] # notice the "dt"to convert
@@ -201,7 +212,6 @@ And this is still work-in-progress
     g.figure.clf()
     return md_description 
 
-
 def plot_jitter_lineages_seaborn (metadata, output_dir=None):
     if output_dir is None: output_dir = cwd
     df = metadata.copy() 
@@ -230,7 +240,9 @@ def plot_jitter_lineages (metadata, output_dir=None):
     if output_dir is None: output_dir = cwd
     df = metadata.copy() 
     df = df[df["submission_org_code"].str.contains("NORW", na=False)]
-    df["dtime"] = pd.to_datetime(df["collection_date"], infer_datetime_format=False, errors='coerce')
+    df.dropna(subset=["collection_date"], inplace=True)
+    #df["dtime"] = pd.to_datetime(df["collection_date"], infer_datetime_format=True, yearfirst=True, errors='coerce')
+    df["dtime"] = df["collection_date"]
     df["peroba_lineage"] = df["peroba_lineage"].str.split('/').str[0] # only first inference
     df["peroba_lineage"].fillna("unclassified", inplace=True)
 
@@ -280,18 +292,19 @@ def plot_jitter_lineages (metadata, output_dir=None):
 def plot_bubble_per_cluster (metadata, counter, output_dir):
     fname = f"bubble{counter}.pdf"
     df=metadata.copy()
-    df = df.groupby(["collection_datetime","adm2"]).size().to_frame(name="size")
+    df.dropna(subset=["collection_date"], inplace=True)
+    df = df.groupby(["collection_date","adm2"]).size().to_frame(name="size")
     df = df.reset_index() # collection and adm2 are indices of series (that we transformed into frame)
-    if len(df["adm2"].unique()) == 0  or len(df["collection_datetime"].unique()) == 0:
+    if len(df["adm2"].unique()) == 0  or len(df["collection_date"].unique()) == 0:
         return "\ntoo few samples with information for bubble plot<br>\n" ## not all samples have collection_date, for instance
-    ratio = len(df["adm2"].unique())/len(df["collection_datetime"].unique())
+    ratio = len(df["adm2"].unique())/len(df["collection_date"].unique())
     if ratio > 4: ratio = 4
     if ratio < 0.25: ratio = 0.25
     #plt.figure(figsize=(dyn_width,dyn_height)); 
     plt.figure(figsize=(8, ratio * 8)); 
     sns.set(font_scale=1); sns.set_context("paper", rc=seaborn_rc);
     sns.set_palette("cubehelix", 8)
-    g = sns.scatterplot(y="adm2", x="collection_datetime", size="size", sizes=(30,150), edgecolor="white", alpha=0.7, data=df)
+    g = sns.scatterplot(y="adm2", x="collection_date", size="size", sizes=(30,150), edgecolor="white", alpha=0.7, data=df)
     #g.set_xticklabels(g.get_xticklabels(), rotation=45, horizontalalignment='right') # nt working
     plt.xticks(rotation=30, horizontalalignment='right') # alternative to loop above (pyplot only)
     plt.tight_layout()
@@ -340,9 +353,47 @@ def plot_postcode_map (metadata, counter, output_dir):
     mapper = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
     mapper.set_array(poly["cnt"])
     plt.colorbar(mapper, shrink=0.5, ax=ax)
-    fig.savefig(os.path.join(output_dir,fname), format="pdf", dpi=(100))  # or plt.savefig()
+    plt.gcf().set_rasterized(True)
+    fig.savefig(os.path.join(output_dir,fname), format="pdf", dpi=(400))  # or plt.savefig()
     fig.clf()
     
     caption = f"Number of samples per region (postal code) for cluster {counter}, for those samples with this information"
+    md_description = f"\n![{caption}]({fname})\n\n"
+    md_description += plot_adm2_map (metadata, counter, output_dir)
+    return md_description
+
+def plot_adm2_map (metadata, counter, output_dir):
+    fname = f"admap{counter}.pdf"
+    df=metadata.copy()
+    warnings.filterwarnings('ignore')
+    nuts = gpd.read_file (f"{uk_gadm_nuts2_file}.shp")
+    nuts.crs = "EPSG:4326"
+
+
+    casecounts = df.groupby(["adm2"]).size().to_frame(name="cnt") 
+    casecounts.fillna(0, inplace=True)
+    casecounts.reset_index(drop=False, inplace=True)
+    casecounts.rename(columns={"adm2":"NAME_2"},inplace=True)
+    poly = nuts.merge(casecounts, on="NAME_2", how="left")
+    poly["cnt"].fillna(0,inplace=True) # geopandas works on a dataframe
+
+    fig, axs = plt.subplots(nrows=1, ncols=1,figsize=(5,6)) # I'm leaving ax in case we want several plots
+    fig.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=None)
+
+    poly.plot(column="cnt", ax=axs, edgecolor='black', linewidth=0.1, #missing_kwds={'color': 'lightgrey'},
+              legend=True, cmap='YlGn', scheme='natural_breaks')
+    axs.set_xlim(-8.1, 1.9)
+    axs.set_ylim(49.9,61)
+    axs.set_aspect('equal') 
+    #axs.set_axis_off()
+    axs.set_title(f"Cluster {counter}")
+    fig.tight_layout()
+    axs.axis('off') # remove frame and optimise space
+
+    plt.gcf().set_rasterized(True)
+    fig.savefig(os.path.join(output_dir,fname), format="pdf", dpi=(400))  # or plt.savefig()
+    fig.clf()
+
+    caption = f"Number of samples per area (NUTS2) for cluster {counter}, for samples where this information is available" 
     md_description = f"\n![{caption}]({fname})\n\n"
     return md_description

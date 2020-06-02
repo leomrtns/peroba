@@ -39,6 +39,7 @@ def get_days_since_2019 (x, impute = False):
             x = x[:4] + "-01-01"
         elif len(str(x)) < 9:
             x = x[:7] + "-01"
+    print (str(x))
     return (datetime.datetime.strptime(str(x),"%Y-%m-%d") - datetime.datetime(2019, 12, 1)).days
 
 def align_seqs (sequences=None, infile=None, outfile=None):
@@ -53,6 +54,7 @@ def align_seqs (sequences=None, infile=None, outfile=None):
     if outfile is None:
         ofl = "/tmp/mafft.aln"
     else:
+
         ofl = outfile
     SeqIO.write(sequences, ifl, "fasta")
     proc_run = subprocess.check_output("mafft --ep 0.3 --op 3.0 --auto " + ifl + " > " + ofl, shell=True, universal_newlines=True)

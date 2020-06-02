@@ -121,12 +121,7 @@ def colormap_from_dataframe (df, column_list, column_names, cmap_list = None):
     for i, (c, cname) in enumerate(zip(column_list, column_names)):
         uniq = df[c].unique()
         cmap_elem = cmap_list[i%len(cmap_list)] # cycle over given colormaps
-        if cmap_elem in ['Pastel1', 'Pastel2', 'Paired', 'Accent','Dark2', 'Set1', 
-                'Set2', 'Set3','tab10', 'tab20', 'tab20b', 'tab20c']: # only 8~20 colours
-            customCMap = colors.LinearSegmentedColormap.from_list("custom", [(x,cm.get_cmap(cmap_elem)(x)) for x in np.linspace(0, 1, 8)])
-        else:
-            customCMap = cm.get_cmap(cmap_elem)
-        colorlist = customCMap(np.linspace(0, 1, len(uniq)))
+        colorlist = common.continuous_cmap (cmap_elem, len(uniq))
         d_col[cname] = {name:colors.to_hex(col) for name,col in zip(uniq, colorlist)} ## each value is another dict from csv elements to colors
     
     col_missing = colors.to_hex([1,1,1,0]) ## transparent, default to white

@@ -18,11 +18,6 @@ from Bio.Phylo import draw, TreeConstruction  #TreeConstruction.DistanceCalculat
 import ete3 
 # https://bioinformatics.stackexchange.com/questions/4337/biopython-phylogenetic-tree-replace-branch-tip-labels-by-sequence-logos
 
-import numpy as np, pandas as pd, seaborn as sns
-from sklearn import manifold, metrics, cluster, neighbors, decomposition, preprocessing
-import skbio, parasail, dendropy, datetime, time, codecs, joypy
-import sys, gzip, lzma, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib
-
 logger = logging.getLogger(__name__) 
 logger.propagate = False
 stream_log = logging.StreamHandler()
