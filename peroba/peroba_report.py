@@ -33,8 +33,6 @@ def plot_over_clusters (csv, tree, min_cluster_size = None, output_dir=None):
     if output_dir is None: output_dir = cwd
     if min_cluster_size is None: min_cluster_size = 5
     df = csv.copy()
-    clist = ["adm2", "peroba_lineage", "peroba_uk_lineage"]
-    cname = ["Administration", "Lineages", "UK lineage"]
 
     md_description = """
 ## Phylogenetic clusters\n
@@ -45,7 +43,7 @@ Only clusters with more than {minc_size} elements are shown.
     md_description += this_description
 
     logger.info("Decorating tree before plotting all clusters")
-    colmap_dict = phylo.colormap_from_dataframe (csv, column_list = clist, column_names=cname)
+    colmap_dict = phylo.colormap_from_dataframe (csv)
     ts = phylo.return_treestyle_with_columns (colmap_dict)
 
     logger.info("Entering loop over clusters found; sit tight!")

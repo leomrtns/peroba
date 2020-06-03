@@ -104,7 +104,7 @@ def get_binary_trait_subtrees (tre, csv,  tiplabel_in_csv = None, elements = 1,
     mono = tre.get_monophyletic (values = "yes", target_attr = new_trait) # from ete3 
     return subtrees, mono, result, new_trait
 
-def colormap_from_dataframe (df, column_list, column_names, cmap_list = None):
+def colormap_from_dataframe_old (df, column_list, column_names, cmap_list = None):
     ''' returns a dictionary of lists, where key is the tip label (should be index of csv)
     column_list and column_names must have same length, mapping to names on CSV and on plot
         the default colormap are qualitative so I guess they fail if #elements>#colours...
@@ -140,12 +140,64 @@ def colormap_from_dataframe (df, column_list, column_names, cmap_list = None):
                 d_seq_lab[seq].append(str(" "))
     return [d_seq, d_seq_lab, d_col, column_names] 
 
+def columnwise_color_scheme (df0):
+    df = df0.copy()
+
+    df["area_code"] = df["submission_org_code"].map(lambda a: "inter" if pd.isnull(a) else str(len(a) > 0)) # coguk 
+    df.loc[df["adm2"].str.contains("folk", na=False) , "area_code"] = "folk"
+    df["icu_admission"] = df["icu_admission"].str.replace("Unknown","?")
+    df["age_range"] = pd.qcut(pd.to_numeric(df['source_age'], errors='coerce'), 8).astype(str)
+    df["collection_week"] = df["collection_date"].dt.week.astype(str)
+    df["source_age"] = df["source_age"].astype(int)
+    # color bar width, label column, column title, coded labels, n1 n2 for color table
+    clist = [[50, "Area", "adm2", "area_code", 0, 2]] 
+    clist.append([40, "Lineages", "peroba_lineage", "peroba_lineage", 3, 4]) ## you can use same column again
+    clist.append([40, "Hospital", "collecting_org", "collecting_org", 7, 2])
+    clist.append([15, "ICU", "icu_admission", "icu_admission", 9, 2])
+    clist.append([15, "Age", "source_age",    "age_range",    11, 2])
+    clist.append([50, "Collection Date", "collection_date", "collection_week", 13, 2])
+
+    return df, clist
+
+def colormap_from_dataframe (df0):
+    ''' returns a dictionary of lists, where key is the tip label (should be index of csv)
+    '''
+    df, trio_names = columnwise_color_scheme (df0)
+    width_and_names = [x[:2] for x in trio_names]
+    trio_names = [x[2:] for x in trio_names]
+    ## iterate over columns (phenotypes), to generate colormaps
+    d_col = {} # dict of colour
+    # trio: column with labels, column title, column w/ label to be mapped to colour, and colourset indices
+    for i, (c, code, n1, n2) in enumerate(trio_names): 
+        uniq = df[code].unique()
+        print (df[c].unique(), code, uniq)
+        colorlist = common.list_from_custom_colorset(n1, n2, len(uniq))
+        d_col[c] = {name:colors.to_hex(col) for name,col in zip(uniq, colorlist)} ## each value is another dict from csv elements to colors
+    
+    col_missing = "#ffffff" # white 
+    ## iterate over rows (sequences)
+    d_seq_color = {}
+    d_seq_label = {}
+    for seq in df.index: # frown upon by pandas wizards
+        d_seq_color[seq] = []
+        d_seq_label[seq] = []
+        for c, code, n1, n2 in trio_names: # l n1 n2 not used here
+            if df.loc[seq,code] in d_col[c]: # valid value for column
+                d_seq_color[seq].append(d_col[c][ df.loc[seq,code] ]) # color of the code column
+                d_seq_label[seq].append(str(df.loc[seq,c])) # label column
+            else:
+                d_seq_color[seq].append(col_missing)
+                d_seq_label[seq].append(str(" "))
+    return [d_seq_color, d_seq_label, width_and_names] 
+
 def return_treestyle_with_columns (cmapvector):
     '''
     Need column names again to print header in order 
     '''
-    [d_seq, d_seq_lab, d_col, column_names] = cmapvector
-    label_font_size = 6
+    [d_seq_color, d_seq_label, width_and_names] = cmapvector
+    rect_width   = [x[0] for x in width_and_names]
+    column_names = [x[1] for x in width_and_names]
+    label_font_size = 7
 
     # default node (not used since it's lost with any customisation, so we create all node styles independently)
     ns1 = ete3.NodeStyle()
@@ -163,9 +215,10 @@ def return_treestyle_with_columns (cmapvector):
         if node.is_leaf(): # the aligned leaf is "column 0", thus traits go to column+1
             node.img_style['size'] = 2; node.img_style['shape'] = "sphere";  node.img_style['fgcolor'] = this_color 
             ete3.add_face_to_node(ete3.AttrFace("name", fsize=label_font_size, text_suffix="   "), node, 0, position="aligned")
-            for column, (rgb_val, lab) in enumerate(zip(d_seq[node.name], d_seq_lab[node.name])): ## colour of csv.loc[node.name, "adm2"]
+            for column, (rgb_val, lab, wdt) in enumerate(zip(d_seq_color[node.name], d_seq_label[node.name], rect_width)): 
                 label = {"text": lab[:10], "color":"Black", "fontsize": label_font_size-1}
-                ete3.add_face_to_node (ete3.RectFace (50, 10, fgcolor=rgb_val, bgcolor=rgb_val, label = label), node, column+1, position="aligned")
+                ete3.add_face_to_node (ete3.RectFace (wdt, 10, fgcolor=rgb_val, bgcolor=rgb_val, label = label), node, 2*column+1, position="aligned")
+                ete3.add_face_to_node (ete3.RectFace (2, 10, fgcolor="#ffffff", bgcolor="#ffffff", label = ""), node, 2*column+2, position="aligned")
         else:
             node.img_style['size'] = 0; 
 
@@ -185,12 +238,12 @@ def return_treestyle_with_columns (cmapvector):
     #ts.legend.add_face(CircleFace(10, "red"), column=0)
     #ts.legend.add_face(TextFace("0.5 support"), column=1)
     #ts.legend_position = 3 #  TopLeft corner if 1, TopRight if 2, BottomLeft if 3, BottomRight if 4
-    for col, label in enumerate([""] + column_names): # the first are tip labels
+    for col, label in enumerate(column_names): # the first are tip labels
         labelFace = ete3.TextFace(label, fsize=10, fgcolor="DimGray") # fsize controls interval betweel columns
-        labelFace.rotation = 290
+        labelFace.rotation = 270
         labelFace.vt_align = 1  # 0 top, 1 center, 2 bottom
         labelFace.hz_align = 2  # 0 left, 1 center, 2 right 
-        ts.aligned_header.add_face(labelFace, col)
+        ts.aligned_header.add_face(labelFace, 2 * col + 1)
     return ts
 
 def ASR_subtrees (metadata0, tree, reroot = True, method = None):
@@ -290,4 +343,6 @@ def save_metadata_inferred (df, tree, csv_cols = None):
 #            if pd.isnull(df.loc[str(leaf.name), col]): ## just impute if it was nan
 #                df.loc[str(leaf.name), col] = "/".join([str(i) for i in x]) # this is original column
     return df
+
+#cmap_list = ["Accent", "Dark2", "cividis", "jet", "hsv", "viridis", "plasma", "rainbow", "nipy_spectral"]
 

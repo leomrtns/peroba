@@ -237,31 +237,24 @@ def add_sequence_counts_to_metadata (metadata, sequences, from_scratch = None):
 
     return metadata, sequences
 
-def transparent_cmap (color=None, cmap=None, final_alpha=None):
-  # http://stackoverflow.com/questions/10127284/overlay-imshow-plots-in-matplotlib
-  if color is None:
-    color = "blue"
-  if (final_alpha is None) or (final_alpha < 0.01):
-    final_alpha = 1.
-  if cmap:
-    mycmap = plt.get_cmap(cmap)
-  else:
-    from matplotlib.colors import colorConverter
-    mycmap = matplotlib.colors.LinearSegmentedColormap.from_list('my_cmap', [colorConverter.to_rgba(color),colorConverter.to_rgba(color)],256)
-
-  mycmap._init() # create the _lut array, with rgba values
-  mycmap._lut[:,-1] = np.linspace(0, final_alpha, mycmap.N+3) # here it is progressive alpha array
-  return mycmap
+def transparent_cmap (color = None, cmap = None, final_alpha = None):
+    # http://stackoverflow.com/questions/10127284/overlay-imshow-plots-in-matplotlib
+    if color is None: color = "blue"
+    if (final_alpha is None) or (final_alpha < 0.01): final_alpha = 1.
+    if cmap:
+        mycmap = plt.get_cmap(cmap)
+    else:
+        from matplotlib.colors import colorConverter
+        mycmap = matplotlib.colors.LinearSegmentedColormap.from_list('my_cmap', [colorConverter.to_rgba(color),colorConverter.to_rgba(color)],256)
+    mycmap._init() # create the _lut array, with rgba values
+    mycmap._lut[:,-1] = np.linspace(0, final_alpha, mycmap.N+3) # here it is progressive alpha array
+    return mycmap
 
 def continuous_cmap (cmap = None, list_size = None):
     """ if list_size is not null, returns a list of this size with colours from cmap; otherwise return the cmap
     """
     if cmap is None: cmap = "plasma"
     if list_size is None: list_size = 0
-    randsets = [["F26440", "D4A0A7", "8FD5A6", "599B6C", "77A4BB", "EFC69B", "B1B7D1", "F6AA1C"], # four handcrafted palletes
-                ["D8C99B", "FE938C", "99B2DD", "FFF9A5", "BAD8B6", "888098", "CACCC1", "5385AA"],
-                ["C48983", "666822", "E9CEBA", "56AACC", "FFBD44", "729FA4", "8C693C", "831F46"],
-                ["AE8EAF", "86927D", "E6B89C", "fed611", "73bfb8", "B1B695", "fef5ae", "BB9457"]]
     ncls = {'Pastel1':9, 'Pastel2':8, 'Paired':12, 'Accent':8,'Dark2':8, 'Set1':9, 
             'Set2':8, 'Set3':12,'tab10':10, 'tab20':20, 'tab20b':20, 'tab20c':20}
     custom_cmap = cm.get_cmap(cmap)
@@ -271,3 +264,32 @@ def continuous_cmap (cmap = None, list_size = None):
         return custom_cmap
     return custom_cmap(np.linspace(0, 1, list_size))
 
+def list_from_custom_colorset (start=0, n_base_colours=4, list_size = 8):
+    base_set = ["F26440", "D4A0A7", "8FD5A6", "599B6C", "77A4BB", "EFC69B", "B1B7D1", "F6AA1C", # pallete of handcrafted colours
+               "D8C99B", "FE938C", "99B2DD", "FFF9A5", "BAD8B6", "888098", "CACCC1", "5385AA", # such that sets of consecutive 
+               "C48983", "666822", "E9CEBA", "56AACC", "FFBD44", "729FA4", "8C693C", "B04D2E", # fours should be fine
+               "AE8EAF", "86927D", "E6B89C", "fed611", "73bfb8", "C4C8A6", "fef5ae", "BB9457", 
+               "9B8870", "744D38", "991E4B", "74929F", "ACE0DC", "ADA982", "7A6157", "A2AABB"]
+    n_base_set = len(base_set)
+    if list_size < 1: list_size = 1
+    if (n_base_colours < 1): n_base_colours = 1 # if you want a single colour?
+    if start < 0: start = 0;
+    start = start % n_base_set  # cycle 
+    end = (start + n_base_colours) % n_base_set
+    if start > end:
+        pivot = end; end = start; start = pivot
+
+    rgbcolours = [hex2rgb(x) for x in base_set[start:end]] # functions use RGB, not hex
+    # create a linear (continuous) colormap and return list with discretised values
+    custom_cmap = colors.LinearSegmentedColormap.from_list("custom", rgbcolours)
+    if (list_size > n_base_colours):
+        return custom_cmap(np.linspace(0, 1, list_size))
+    elif list_size == 1: 
+        return custom_cmap(0.5) # average colour in basic set
+    else: # no deep thought here, just avoiding returning same set 
+        cstm = custom_cmap(np.linspace(0, 1, list_size+1))
+        return cstm[1:]
+
+def hex2rgb (x, norm = True):
+    if norm:
+        return tuple(float(int(x[i:i+2], 16))/255. for i in (0, 2, 4))
