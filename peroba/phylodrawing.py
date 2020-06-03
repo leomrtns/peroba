@@ -146,15 +146,16 @@ def columnwise_color_scheme (df0):
     df["area_code"] = df["submission_org_code"].map(lambda a: "inter" if pd.isnull(a) else str(len(a) > 0)) # coguk 
     df.loc[df["adm2"].str.contains("folk", na=False) , "area_code"] = "folk"
     df["icu_admission"] = df["icu_admission"].str.replace("Unknown","?")
-    df["age_range"] = pd.qcut(pd.to_numeric(df['source_age'], errors='coerce'), 8).astype(str)
+    df["age_range"] = pd.qcut(pd.to_numeric(df['source_age'], errors='coerce'), 5).astype(str)
     df["collection_week"] = df["collection_date"].dt.week.astype(str)
-    df["source_age"] = df["source_age"].astype(int)
+    df["source_age"] = df["source_age"].str.split('.').str[0]
     # color bar width, label column, column title, coded labels, n1 n2 for color table
     clist = [[50, "Area", "adm2", "area_code", 0, 2]] 
-    clist.append([40, "Lineages", "peroba_lineage", "peroba_lineage", 3, 4]) ## you can use same column again
-    clist.append([40, "Hospital", "collecting_org", "collecting_org", 7, 2])
-    clist.append([15, "ICU", "icu_admission", "icu_admission", 9, 2])
-    clist.append([15, "Age", "source_age",    "age_range",    11, 2])
+    clist.append([40, "Lineages", "peroba_lineage", "peroba_lineage", 3, 3]) ## you can use same column again
+    clist.append([40, "Hospital", "collecting_org", "collecting_org", 6, 2])
+    clist.append([15, "ICU", "icu_admission", "icu_admission", 8, 2])
+    #clist.append([15, "Age", "source_age",    "age_range",    11, 2])
+    clist.append([15, "Age", "source_age",    "source_age",    10, 3])
     clist.append([50, "Collection Date", "collection_date", "collection_week", 13, 2])
 
     return df, clist
@@ -170,7 +171,7 @@ def colormap_from_dataframe (df0):
     # trio: column with labels, column title, column w/ label to be mapped to colour, and colourset indices
     for i, (c, code, n1, n2) in enumerate(trio_names): 
         uniq = df[code].unique()
-        print (df[c].unique(), code, uniq)
+        print (code, uniq)
         colorlist = common.list_from_custom_colorset(n1, n2, len(uniq))
         d_col[c] = {name:colors.to_hex(col) for name,col in zip(uniq, colorlist)} ## each value is another dict from csv elements to colors
     
@@ -217,8 +218,8 @@ def return_treestyle_with_columns (cmapvector):
             ete3.add_face_to_node(ete3.AttrFace("name", fsize=label_font_size, text_suffix="   "), node, 0, position="aligned")
             for column, (rgb_val, lab, wdt) in enumerate(zip(d_seq_color[node.name], d_seq_label[node.name], rect_width)): 
                 label = {"text": lab[:10], "color":"Black", "fontsize": label_font_size-1}
-                ete3.add_face_to_node (ete3.RectFace (wdt, 10, fgcolor=rgb_val, bgcolor=rgb_val, label = label), node, 2*column+1, position="aligned")
-                ete3.add_face_to_node (ete3.RectFace (2, 10, fgcolor="#ffffff", bgcolor="#ffffff", label = ""), node, 2*column+2, position="aligned")
+                ete3.add_face_to_node (ete3.RectFace (wdt, 11, fgcolor=rgb_val, bgcolor=rgb_val, label = label), node, 2*column+1, position="aligned")
+                ete3.add_face_to_node (ete3.RectFace (2, 11, fgcolor="#ffffff", bgcolor="#ffffff", label = ""), node, 2*column+2, position="aligned")
         else:
             node.img_style['size'] = 0; 
 
@@ -239,10 +240,10 @@ def return_treestyle_with_columns (cmapvector):
     #ts.legend.add_face(TextFace("0.5 support"), column=1)
     #ts.legend_position = 3 #  TopLeft corner if 1, TopRight if 2, BottomLeft if 3, BottomRight if 4
     for col, label in enumerate(column_names): # the first are tip labels
-        labelFace = ete3.TextFace(label, fsize=10, fgcolor="DimGray") # fsize controls interval betweel columns
+        labelFace = ete3.TextFace(label, fsize=9, fgcolor="DimGray") # fsize controls interval betweel columns
         labelFace.rotation = 270
-        labelFace.vt_align = 1  # 0 top, 1 center, 2 bottom
-        labelFace.hz_align = 2  # 0 left, 1 center, 2 right 
+        labelFace.vt_align = 2  # 0 top, 1 center, 2 bottom
+        labelFace.hz_align = 1  # 0 left, 1 center, 2 right 
         ts.aligned_header.add_face(labelFace, 2 * col + 1)
     return ts
 
