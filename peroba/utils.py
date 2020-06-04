@@ -13,6 +13,14 @@ import datetime, sys, gzip, lzma, bz2, re, subprocess, os, itertools, ete3, coll
 #from sklearn import manifold, metrics, cluster, neighbors, decomposition, preprocessing
 #import skbio, parasail, dendropy, time, codecs, joypy, pathlib, random, errno, collections, pickle, glob
 
+def colour_string (fname, colour="yellow"):
+    ccodes = {"black":30, "red":31, "green":32, "yellow":33, "blue":34, "purple":35, "cyan":36, "white":37}
+    if colour in ccodes.keys():
+        c = ccodes[colour]
+    else:
+        c = 33
+    return f"\x1b[0;0;{c};1m{fname}\x1b[0m"
+
 def print_redblack(textr="", textb=""):
     print ('\x1b[0;1;31;1m'+ str(textr) + '\x1b[0;1;30;1m'+ str(textb) + '\x1b[0m')
 

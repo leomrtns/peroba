@@ -357,12 +357,19 @@ class PerobaBackbone:
 
 def save_global_from_seqnames (bb, seqnames, prefix):
     seqs, snps, trees = bb.remove_seq_tree_based_on_metadata (seqnames)
-    save_sequences (seqs, prefix)
+    desc = save_sequences (seqs, prefix)
     fname = prefix + ".trees.nhx" 
     with open(fname,"w") as fw:
         for t in trees:
             fw.write(str(t) + "\n")
     logger.info(f"Finished saving global tree(s) to file {fname}")
+    
+    # format(colour_string(desc).ljust(32, ' ')) # not using ljust anymore
+    desc  = "{}\n Aligned sequences selected from global data\n".format(colour_string(desc))
+    fname = os.path.basename(fname)
+    desc += "{}\n Pruned trees, with leaves only from global data (for phylo inference, see 'user' trees)\n".format(colour_string(fname))
+    desc += " First tree is full tree from COGUK, remaining trees are provided from user, if any\n"
+    return desc + "\n"
 
 def save_user_trees (bb, seqnames, prefix, add_nj_tree = False):
     logger.info ("Saving user-defined trees with added sequences")
@@ -381,28 +388,38 @@ def save_user_trees (bb, seqnames, prefix, add_nj_tree = False):
     ## add sequences from current analysis (all local plus global neighbours)
     aln.update({x:y for x,y in bb.g_seq.items() if x in seqnames})
     aln.update({x:y for x,y in bb.l_seq.items()})
-    save_sequences (aln, prefix)
-    logger.info ("In total, %s sequences form the user-defined data set (from the trees plus the ones found here)",
+    desc = save_sequences (aln, prefix)
+    desc  = "{}\n alignment with sequences from all user-defined trees (that I have access to), as well as all \n".format(colour_string(desc))
+    desc += " global and local sequences \n".
+
+    logger.info ("In total, %s sequences are part of the user-defined data set (user trees plus sequences found here)",
             str(len(aln)))
 
     fname = prefix + ".trees.nhx" 
     with open(fname,"w") as fw:
-        for t in trees:
-            fw.write(str(t) + "\n")
         treestring = None
         if add_nj_tree:
-            logger.info ("Estimating NJ tree with all user-defined sequences")
+            logger.info ("Estimating NJ tree with all user-defined sequences (will be the first tree in file)")
             snp_aln = snpsites_from_alignment ([x for x in aln.values()])
             treestring = rapidnj_from_alignment (snp_aln, n_threads =12)
             fw.write(treestring + "\n")
+        for t in trees:
+            fw.write(str(t) + "\n")
     logger.info(f"Finished saving user-defined trees to file {fname}")
+
+    fname = os.path.basename(fname)
+    desc += "{}\n User-defined trees with subset of leaves for which I've found sequences\n".format(colour_string(fname))
+    if (add_nj_tree):
+        desc += " where the first tree is a NJ estimate from all 'user' sequences above\n"
+    return desc + "\n"
 
 def save_all_sequences (bb, seqnames, prefix, add_nj_tree = True):
     logger.info ("Saving data set with all local and selected global sequences")
     ## add sequences from current analysis (all local plus global neighbours)
     aln = {x:y for x,y in bb.g_seq.items() if x in seqnames}
     aln.update({x:y for x,y in bb.l_seq.items()})
-    save_sequences (aln, prefix)
+    desc = save_sequences (aln, prefix)
+    desc = "{}: alignment with (all) local and (selected) global sequences (main output of program)\n".format(colour_string(desc))
     logger.info ("Total of %s sequences will form the local+global data set", str(len(aln)))
 
     if add_nj_tree:
@@ -414,6 +431,11 @@ def save_all_sequences (bb, seqnames, prefix, add_nj_tree = True):
         with open(fname,"w") as fw:
             fw.write(treestring + "\n")
         logger.info(f"Finished saving local+global tree to {fname}")
+        fname = os.path.basename(fname)
+        desc += "{}\n NJ estimate of all global and local sequences (useful for phylo inference)\n".format(colour_string(fname))
+    else:
+        desc += " (NJ estimation was not requested)\n"
+    return desc + "\n"
 
 def save_sequences (seqs, prefix):
     fname = prefix + ".aln.xz" 
@@ -432,6 +454,7 @@ def save_sequences (seqs, prefix):
                 fw.write(str(f">{name}\n{seq}\n").encode())
                 rec.id = name ## make sure alignment will have same names
     logger.info(f"Finished saving alignment")
+    return os.path.basename(fname)
 
 def read_peroba_database (f_prefix): 
     if f_prefix[-1] == ".": f_prefix = f_prefix[:-1] ## both `perobaDB.0621` and `perobaDB.0621.` are valid
@@ -452,7 +475,7 @@ def read_peroba_database (f_prefix):
     logger.info("Finished loading the database; dataframe has dimensions %s and it's assumed we have the same number of sequences; the tree may be smaller", metadata.shape)
     return [metadata, sequences, tree]
 
-def generate_backbone_dataset (database, csv, sequences, trees, replace, prefix):
+def main_generate_backbone_dataset (database, csv, sequences, trees, replace, prefix):
     # initialisation
     bb = PerobaBackbone (database)
     bb.add_local_data_and_sequences (csv, sequences, replace)
@@ -461,15 +484,20 @@ def generate_backbone_dataset (database, csv, sequences, trees, replace, prefix)
     bb.remove_duplicates()
     ## these two reduce data set, but ideally should return a copy (TODO)
     bb.remove_low_quality()
-    bb.reduce_redundancy() 
+    bb.reduce_redundancy() ## add step to remove too distant 
     # more methods come here
     neighbours = bb.find_neighbours()
     # for each method we can use chosen neighbours to save global only or both
-    save_global_from_seqnames (bb, neighbours, prefix + "coguk")
-    save_user_trees (bb, neighbours, prefix + "user", add_nj_tree = True)
-    save_all_sequences (bb, neighbours, prefix + "norw-coguk", add_nj_tree = True)
+    description  = save_global_from_seqnames (bb, neighbours, prefix + "coguk")
+    description += save_user_trees (bb, neighbours, prefix + "user", add_nj_tree = True)
+    description += save_all_sequences (bb, neighbours, prefix + "norw-coguk", add_nj_tree = True)
     # finally, save all NORW sequences
-    save_sequences (bb.l_seq, prefix + "norw")
+    desc = save_sequences (bb.l_seq, prefix + "norw")
+    description += "{}\n alignment with all local sequences only\n".format(colour_string(desc))
+
+    print ("Finished. The output files are described below, where 'global' means COGUK and GISAID data which were\n")
+    print ("{} generated in NORW. Those, together with the extra sequences are being called'local'.".format(colour_string("not", "red")))
+    print (f"Files produced:\n{description}")
     
 class ParserWithErrorHelp(argparse.ArgumentParser):
     def error(self, message):
@@ -494,7 +522,7 @@ def main():
     parser.add_argument('-i', '--input', action="store", help="Directory where perobaDB files are. Default: working directory")
     parser.add_argument('-c', '--csv', metavar='csv', help="csv table with metadata from NORW")
     parser.add_argument('-s', '--sequences', metavar='fasta.bz2', help="extra sequences from NORW")
-    parser.add_argument('-t', '--trees', metavar='', help="file with trees in newick format to help produce backbone")
+    parser.add_argument('-t', '--trees', metavar='', help="file with (user-defined) trees in newick format to help produce backbone")
     parser.add_argument('-o', '--output', action="store", help="Output database directory. Default: working directory")
     parser.add_argument('-r', '--replace', default=False, action='store_true', help="replace database sequence with local version")
 
@@ -557,7 +585,7 @@ def main():
                 logger.info("%s leaves in treefile %s", len(tree_leaves), str(i))
                 trees.append(tre)
 
-    generate_backbone_dataset (database, csv, sequences, trees, args.replace, prefix)
+    main_generate_backbone_dataset (database, csv, sequences, trees, args.replace, prefix)
 
 
 if __name__ == '__main__':
