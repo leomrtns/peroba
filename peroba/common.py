@@ -7,11 +7,11 @@ from matplotlib import rcParams, cm, colors, patches
 ## TODO: columns w/ values in csv but not metadata (e.g. adm_private or this week's) may not ASreconstructed
 ## (not merged?)
 
-
 import logging, ete3
 import numpy as np, pandas as pd
 from Bio import Seq, SeqIO
-import datetime, sys, lzma, gzip, bz2, re, glob, collections, subprocess, os, itertools, pathlib
+import datetime, sys, lzma, gzip, bz2, re, glob, collections, subprocess, os, itertools, pathlib, base64
+import pandas_profiling # ProfileReport
 
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False
@@ -31,7 +31,9 @@ suffix = {
         "sequences": ".sequences.fasta.xz",
         "alignment": ".sequences.aln.xz"
         }
-        
+
+qi_logo_file = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/report/QIlogo.png") 
+ 
 #asr_cols = ["adm2", "uk_lineage", "lineage", "phylotype", "submission_org_code", "date_sequenced", "source_age", "source_sex", "collecting_org", "ICU_admission"]
 
 # For nabil, these must be on our output csv: peroba_uk_lineage    peroba_lineage    peroba_phylotype    peroba_special_lineage  central_sample_id
@@ -39,7 +41,33 @@ suffix = {
 asr_cols = ["uk_lineage", "lineage", "phylotype"]  
 # therefore we exclude the following columns from local (a.k.a. master table), since these must be from global metadata if present
 remove_from_master_cols = ["uk_lineage", "lineage", "phylotype", "special_lineage", "acc_lineage", "del_lineage"]
+dtype_numeric_cols = [
+        'gaps', 'length', 'edin_epi_week', 'epi_week', 'layout_insert_length', 'layout_read_length', 'missing', 
+        'source_age', 'virus', 'lineage_support',  # upstream  (coguk+gisaid)
+        "peroba_freq_acgt", "peroba_freq_n", "PCR Ct value", "Coverage (X)",  # local (peroba, NORW)
+        "ct_1_ct_value", "ct_2_ct_value", "No. Reads", "Mapped Reads", "No. Bases (Mb)",
+        "Average read length", "Missing bases (N)", "Consensus SNPs"]
 
+dtype_datetime_cols = ["date_submitted", "collection_date", "received_date", "sequencing_submission_date", "start_time",
+      "date_sequenced"] # from NORW metadata
+# "Sequencing date" is coded (20200516) but not equal to "date_sequenced" 
+
+## true false Basic QC , High Quality QC,
+    
+def metadata_to_html (df0, filename, description):
+    df = set_dtypes_metadata (df0)
+    covrge = "Coverage (X)" ## must remove ending X (e.g. 2000X)
+    if covrge in df.columns:
+        df[covrge] =  pd.to_numeric(df[covrge].str[:-1])
+
+    profile = pandas_profiling.ProfileReport (df, title = description, explorative=True)
+    profile.set_variable("html.style.primary_color", "#00a990") # #bed12b avocado #00a990 bluegreen #333f48 dark green
+    logo = base64.b64encode(open(qi_logo_file, 'rb').read()) 
+    logo = "data:image/png;base64," + logo.decode('utf-8')
+    profile.set_variable("html.style.logo", logo) 
+    profile.set_variable("html.style.theme", "flatly") 
+    profile.set_variable("correlations.cramers.calculate", False) # get a warning otherwise  
+    profile.to_file(filename)
 
 def read_ete_treefile (treefile, multi = None):
     if multi is None: 
@@ -87,45 +115,78 @@ def read_fasta (filename, fragment_size = 0, check_name = False):
     logger.info("Read %s sequences from file %s", str(len(unaligned)), filename)
     return unaligned
 
-def df_read_genome_metadata (filename, primary_key = "sequence_name", rename_dict = "default", sep=',', compression="infer", 
-        index_name = "peroba_seq_uid", remove_edin = True, exclude_na_rows = None, exclude_columns = "default"):
+def set_dtypes_metadata (df0):
+    df = df0.copy()
+    columns = [x for x in dtype_numeric_cols if x in df.columns]
+    for col in columns:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+    columns = [x for x in dtype_datetime_cols if x in df.columns]
+    for col in columns:
+        df[col] = pd.to_datetime(df[col], infer_datetime_format=True, yearfirst=True, errors='coerce')
+    return df
+
+def replace_values_metadata (df0):
+    df = df0.copy()
+    if "source_sex" in df.columns:
+        df["source_sex"] = df["source_sex"].replace(["Woman", "Female", "FEmale"],"F")
+        df["source_sex"] = df["source_sex"].replace(["Male"],"M")
+        df["source_sex"] = df["source_sex"].replace(["Unknown", "unknwon", "U"],"?")
+    if "adm2" in df.columns:
+        df['adm2'] = df['adm2'].str.title()
+        df["adm2"] = df["adm2"].replace(["Unknown Source","Unknown"],"")
+        df["adm2"] = df["adm2"].replace({"Greater_London":"Greater London"}) # "Hertfordshire" != "Herefordshire"
+        #df['adm2'].fillna(df.country, inplace=True)
+    #df["uk_lineage"] = df["uk_lineage"].replace(np.nan, "x", regex=True) 
+    return df
+ 
+def rename_columns_metadata (df0):
+    df = df0.copy()
+    rename_dict = {
+        'sample_date':'collection_date',  # from cog_gisaid
+        'strain':'sequence_name',         # others below from GISAID
+        'date':'collection_date',
+        'sex':'source_sex',
+        'age':'source_age'}
+    for old, new in rename_dict.items():
+        if old in df.columns: 
+            df.rename(columns={old:new}, inplace=True)
+    no_edin = {x:x.replace("edin_", "") for x in list(df.columns) if x.startswith("edin_")}
+    df.rename(columns=no_edin, inplace=True)
+    return df
+
+def exclude_irrelevant_columns_metadata (df0):  # no samples with this information yet (all missing values) 
+    df = df0.copy()
+    exclude_columns = ["is_travel_history","is_surveillance","is_hcw", "is_community", "outer_postcode", "metadata" ] #  "travel_history" has a few
+    exclude_columns = [x for x in exclude_columns if x in list(df.columns)]
+    if exclude_columns:
+        df.drop (labels = exclude_columns, axis=1, inplace = True)
+    return df
+
+def remove_rows_with_missing_metadata (df0):  # currently not used, since too restrictive 
+    df = df0.copy()
+    exclude_na_rows = ['collection_date','sequence_name','lineage', 'adm2']
+    # reduce table by removing whole columns and rows with missing information
+    exclude_na_rows = [x for x in exclude_na_rows if x in list(df.columns)]
+    if exclude_na_rows:
+        df.dropna (subset = exclude_na_rows, inplace = True);
+    return df
+
+def df_read_genome_metadata (filename, primary_key = "sequence_name", sep=',', index_name = "peroba_seq_uid", 
+        exclude_na_rows = False, exclude_columns = True):
     ''' Read CSV data using "sequence_name" as primary key 
     TODO: there are sequences with same name (e.g. distinct assemblies), currently only one is kept. 
     I could create a column combination (multi-index?) to keep all
     '''
-    if rename_dict == "default":
-        rename_dict = {
-            'sample_date':'collection_date',  # from cog_gisaid
-            'strain':'sequence_name',         # others below from GISAID
-            'date':'collection_date',
-            'sex':'source_sex',
-            'age':'source_age'}
-    if exclude_na_rows == "default": ## better NOT to set this up here (only at finalise_data())
-        exclude_na_rows = ['collection_date','sequence_name','lineage', 'adm2']
-    if exclude_columns == "default":
-        exclude_columns = ["is_travel_history","is_surveillance","is_hcw", "is_community", "outer_postcode", "travel_history"]
 
-    df1 = pd.read_csv (str(filename), compression=compression, sep=sep, dtype='unicode') # sep='\t' for gisaid
+    df1 = pd.read_csv (str(filename), compression="infer", sep=sep, dtype='unicode') # sep='\t' for gisaid
 
-    # fix column names  
-    if rename_dict:
-        for old, new in rename_dict.items():
-            if old in list(df1.columns): ## I expected pandas to do this check...
-                df1.rename(columns={old:new}, inplace=True)
-    if remove_edin: # EDINBURGH custom labels have an "edin" prefix
-        no_edin = {x:x.replace("edin_", "") for x in list(df1.columns) if x.startswith("edin_")}
-
-    # reduce table by removing whole columns and rows with missing information
+    df1 = rename_columns_metadata (df1) # fix column names before working with them, below
+    df1 = set_dtypes_metadata (df1)
+    df1 = replace_values_metadata (df1)
+    if exclude_columns:
+        df1 = exclude_irrelevant_columns_metadata (df1)
     if exclude_na_rows: # list of important columns, such that rows missing it should be removed
-        important_cols = [x for x in exclude_na_rows if x in list(df1.columns)]
-        if important_cols:
-            df1.dropna (subset = important_cols, inplace = True);
-
-    #EX: exclude_columns = ["is_travel_history","is_surveillance","is_hcw", "is_community", "outer_postcode", "travel_history"]
-    if exclude_columns: # list of irrelevant columns
-        irrelevant_cols = [x for x in exclude_columns if x in list(df1.columns)]
-        if irrelevant_cols:
-            df1.drop (labels = irrelevant_cols, axis=1, inplace = True) # no sample with this information
+        df1 = remove_rows_with_missing_data (df1)
 
      # This must be relaxed if we want global statistics (no purging of incomplete rows)
     if index_name not in list(df1.columns): # regular CSV file from external source
@@ -137,11 +198,8 @@ def df_read_genome_metadata (filename, primary_key = "sequence_name", rename_dic
         df1.set_index (str(index_name), drop = True, inplace = True) # drop the column to avoid having both with same name
     
     if "collection_date" in df1.columns: ## keep most recent first (in case one has wrong date)
-        df1["collection_date"] = pd.to_datetime(df1["collection_date"], infer_datetime_format=True, yearfirst=True, errors='coerce')
         df1.sort_values(by=["collection_date"], inplace = True, ascending=False)
     
-    if "adm2" in df1.columns:
-        df1['adm2'] = df1['adm2'].str.title()
     df1 = df1.groupby(df1.index).aggregate("first"); # duplicated indices are allowed in pandas
     return df1
 
@@ -155,7 +213,7 @@ def df_merge_metadata_by_index (df1, df2): # replaces NA whenever possible, usin
     #df1.sort_index(inplace=True)
     return df1
 
-def df_finalise_metadata (df, exclude_na_rows = None, exclude_columns = "default", remove_duplicate_columns = True):
+def df_finalise_metadata (df, exclude_na_rows = False, exclude_columns = False, remove_duplicate_columns = True):
     ''' if exclude_na_rows is the string "default" then we use sensible choices
     '''
     if exclude_na_rows == "default":
@@ -163,36 +221,21 @@ def df_finalise_metadata (df, exclude_na_rows = None, exclude_columns = "default
     if exclude_columns == "default":
         exclude_columns = ["is_travel_history","is_surveillance","is_hcw", "is_community", "outer_postcode", "travel_history"]
 
-    # df['days_since_Dec19'] = df['collection_date'].map(lambda a: get_days_since_2019(a, impute = True)) ## not here
-    # df['days_since_Dec19'] = df['collection_date'].map(lambda a: datetime.datetime(a) - datetime.datetime(2019,12, 1).days) 
-    df["collection_date"] = pd.to_datetime(df["collection_date"], infer_datetime_format=True, yearfirst=True, errors='coerce')
     cols = [x for x in ['lineage_support', 'collection_date'] if x in df.columns]
     df = df.sort_values(by=cols, ascending=False)
     
     ## CURRENTLY NOT WORKING since sequence_name was used as primary key... 
     # COGUK phylo analysis removes low-quality seqs, which are deleted from metadata as well. (COGUK phylo assigns decent senames)
     #   I give another chance for these deleted sequences, if their names correspond to sample_central_id 
-
     #df.reset_index (drop=False, inplace=True) ## drop=False will make peroba_seq_uid become a column
     #df['sequence_name'].fillna("sample_central_id", inplace=True)
     #df['peroba_seq_uid'].fillna("sample_central_id", inplace=True)
     #df.set_index ("peroba_seq_uid", drop = True, inplace = True) # drop deletes the extra peroba_seq_uid column
 
-    # default values for missing rows (in case we don't want to remove those rows)
-    #if not exclude_na_rows or "uk_lineage" not in exclude_na_rows:
-    #    df["uk_lineage"] = df["uk_lineage"].replace(np.nan, "x", regex=True) 
-    if not exclude_na_rows or "adm2" not in exclude_na_rows:
-        df['adm2'].fillna(df.country, inplace=True)
-    df['adm2'] = df['adm2'].str.title()
-
-    if exclude_na_rows: # list of important columns, such that rows missing it should be removed
-        important_cols = [x for x in exclude_na_rows if x in list(df.columns)]
-        if important_cols:
-            df.dropna (subset = important_cols, inplace = True);
-    if exclude_columns: # list of irrelevant columns
-        irrelevant_cols = [x for x in exclude_columns if x in list(df.columns)]
-        if irrelevant_cols:
-            df.drop (labels = irrelevant_cols, axis=1, inplace = True) # no sample with this information
+    if exclude_columns:
+        df = exclude_irrelevant_columns_metadata (df)
+    if exclude_na_rows: 
+        df1 = remove_rows_with_missing_data (df1)
 
     if remove_duplicate_columns: # who knows which column it will choose (i.e. column names)
         df = df.T.drop_duplicates().T # transpose, remove duplicate rows, and transpose again

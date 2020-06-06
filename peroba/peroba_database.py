@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-## TODO: "UNKNOWN SOURCE" and "UNKNOWN" are the same adm2 (in cog)
 ## this is a simplified module that gets the job done; for a more complete implementation see discarded functions file
 
 import logging, ete3, argparse
@@ -58,6 +57,11 @@ class PerobaDatabase:
             fname = self.prefix + common.suffix["metadata"]
             logger.info(f"Saving metadata to file {fname}")
             self.metadata.to_csv (fname)
+            desc = "perobaDB merged metadata information {}".format(datetime.datetime.now().strftime("%Y-%m-%d"))
+            fname = self.prefix + ".html"
+            logger.info(f"Generating an HTML report of metadata variables in {fname}")
+            common.metadata_to_html (self.metadata, fname, desc) 
+
         else:
             logger.warning("Metadata missing: this won't be a valid database")
 
@@ -93,10 +97,10 @@ class PerobaDatabase:
                         rec.id = name ## make sure alignment will have same names
 
             fname = self.prefix + common.suffix["alignment"]
-            logger.info(f"Aligning sequences...")
+            logger.info(f"Aligning sequences with mafft")
             ref_seq = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/MN908947.3.fas")  
-            aln = minimap2_align_seqs([x for x in self.sequences.values()], reference_path=ref_seq)
-            logger.info(f"... and saving alignment to file {fname}")
+            aln = align_sequences_from_dict (self.sequences, reference_file = ref_seq, seqs_per_block = 1000)
+            logger.info(f"Saving alignment to file {fname}")
             with this_open(fname,"wb") as fw: 
                 for sequence in aln: # list of sequences (not dictionary as above) 
                     fw.write(str(f">{sequence.id}\n{sequence.seq}\n").encode())
@@ -125,7 +129,7 @@ class PerobaDatabase:
         df1 = common.df_finalise_metadata (df1)
         self.metadata = df1
         self.raw = df1.copy() ## not merged with sequence
-        logger.info("Finished reading metadata files. Merged dataframe has shape %s (rows x cols)", str(self.metadata.shape))
+        logger.info("Finished reading metadata files. Merged (raw) dataframe has shape %s (rows x cols)", str(self.metadata.shape))
         
         self.merge_data_tree ()
         self.merge_data_sequence ()
@@ -193,7 +197,21 @@ class PerobaDatabase:
             self.tree.prune([node for node in self.tree_leaves.values()], preserve_branch_length=True) # or leafnames, but fails on duplicates
         ## remove table rows absent from tree or just mark tree as incomplete
         logger.debug("DataTree:: Tree will not be used to remove rows from metadata")
-        
+
+def align_sequences_from_dict (sequences, reference_file, seqs_per_block = 2000): 
+    if seqs_per_block < 100:   seqs_per_block = 100
+    if seqs_per_block > 10000: seqs_per_block = 10000 # mafft chokes on large matrices (but 10k is fine btw)
+    seq_list = [x for x in sequences.values()]
+    nseqs = len(seq_list)
+    aligned = []
+    for i in range (0, nseqs, seqs_per_block):
+        last = i + seqs_per_block
+        if last > nseqs: last = nseqs
+        aln = mafft_align_seqs (seq_list[i:last], reference_file = reference_file)
+        aligned += aln
+        logger.info (f"First {last} sequences aligned")
+    return aligned
+
 class ParserWithErrorHelp(argparse.ArgumentParser):
     def error(self, message):
         sys.stderr.write('error: %s\n' % message)
@@ -209,7 +227,7 @@ def fill_file_location (filelist, directory):
         if not os.path.exists(fname):
             fname = os.path.join(directory, f)
         if not os.path.exists(fname):
-            logger.warning ("Could not find file {f}; Will proceed anyway")
+            logger.warning (f"Could not find file {f}; Will proceed anyway")
         else:
             logger.info(f"Found file {fname}")
             fullname.append(fname)

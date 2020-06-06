@@ -50,7 +50,7 @@ def get_days_since_2019 (x, impute = False):
     print (str(x))
     return (datetime.datetime.strptime(str(x),"%Y-%m-%d") - datetime.datetime(2019, 12, 1)).days
 
-def align_seqs (sequences=None, infile=None, outfile=None):
+def align_seqs_without_reference (sequences=None, infile=None, outfile=None):
     print ("started aligning...", flush=True, end=" ")
     if (sequences is None) and (infile is None):
         print ("ERROR: You must give me an alignment object or file")
@@ -62,7 +62,6 @@ def align_seqs (sequences=None, infile=None, outfile=None):
     if outfile is None:
         ofl = "/tmp/mafft.aln"
     else:
-
         ofl = outfile
     SeqIO.write(sequences, ifl, "fasta")
     proc_run = subprocess.check_output("mafft --ep 0.3 --op 3.0 --auto " + ifl + " > " + ofl, shell=True, universal_newlines=True)
@@ -74,6 +73,32 @@ def align_seqs (sequences=None, infile=None, outfile=None):
         os.system("rm -f " + ofl)
     return aligned
 
+def mafft_align_seqs (sequences=None, infile = None, outfile = None, reference_file = None, prefix = "/tmp/", exclude_reference = True):
+    if (sequences is None) and (infile is None):
+        print ("ERROR: You must give me a fasta object or file")
+    if prefix is None: prefix = "./"
+    if infile is None: ifl = f"{prefix}/mafft.fasta"
+    else: ifl = infile # if both infile and sequences are present, it will save (overwrite) infile
+    if outfile is None: ofl = f"{prefix}/mafft.aln"
+    else: ofl = outfile # in this case it will not exclude_reference
+    if sequences: SeqIO.write(sequences, ifl, "fasta") ## else it should be present in infile
+
+    reference_file = os.path.expanduser(reference_file) 
+    runstr = f"mafft --auto --keeplength --thread -1 --addfragments {ifl} {reference_file} > {ofl}"
+    proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)
+    aligned = AlignIO.read(ofl, "fasta")
+
+    if infile is None:  os.system("rm -f " + ifl)
+    if outfile is None: os.system("rm -f " + ofl)
+
+    if exclude_reference:
+        refseq = AlignIO.read(reference_file, "fasta")
+        refseqname = refseq[0].id
+        aligned = [x for x in aligned if x.id != refseqname]
+        if outfile is not None:
+            SeqIO.write(aligned, ofl, "fasta")
+    return aligned
+
 def lowlevel_parse_cigar (s):
     out = list(); ind = len(s)-1
     while ind >= 0:
@@ -82,7 +107,7 @@ def lowlevel_parse_cigar (s):
         out.append((let, int(num[::-1])))
     return out[::-1]
 
-def minimap2_align_seqs (sequences=None, infile = None, reference_path = None, prefix = "/tmp/", n_threads = 4):
+def minimap2_align_seqs (sequences=None, infile = None, reference_file = None, prefix = "/tmp/", n_threads = 4):
     """ todo: we dont need the ref genome .mmi, we can use the ref genome directly, and use seqio.write() """
     if (sequences is None) and (infile is None):
         print ("ERROR: You must give me a fasta object or file")
@@ -94,7 +119,7 @@ def minimap2_align_seqs (sequences=None, infile = None, reference_path = None, p
     reference_path = os.path.expanduser(reference_path) ## FIXME: I should always do this to avoid tilde curse
     index_path = '%s.mmi' % reference_path
     if not os.path.isfile(index_path):
-        runstr = f"minimap2 -t {n_threads} -d {index_path} {reference_path}"
+        runstr = f"minimap2 -x asm5 -t {n_threads} -d {index_path} {reference_path}"
         proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)    
 
     runstr = f"minimap2 -ax asm5 -t {n_threads} -o {samfile} {index_path} {ifl}" # preset for div < 1%

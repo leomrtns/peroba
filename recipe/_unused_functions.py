@@ -465,3 +465,156 @@ if __name__ == '__main__':
         self.l_seq = {x.id:x for x in self.g_seq if x.id in self.l_csv["sequence_name"]}
         self.g_seq = {x.id:x for x in self.g_seq if x.id in self.g_csv["sequence_name"]}
         logger.info ("splitting data into %s global and %s local sequences", str(self.g_csv.shape[0]), str(self.l_csv.shape[0]))
+def main():
+    parser = ParserWithErrorHelp(
+    description="peroba_database is the script that generates from scratch the integrated data from COGUK and GISAID",
+    usage='''peroba_database [options] ''')
+
+    parser.add_argument('-d', '--debug', action="store_const", dest="loglevel", const=logging.DEBUG, default=logging.WARNING,
+            help="Print debugging statements")
+    parser.add_argument('-v', '--verbose', action="store_const", dest="loglevel", const=logging.INFO, help="Add verbosity")
+#    parser.add_argument('-m', '--metadata', metavar='csv', type=argparse.FileType('r'), ## this opens the file !
+    parser.add_argument('-m', '--metadata', metavar='csv', nargs='+', required=True, 
+            help="csv/tsv files with metadata information (from COGUK or GISAID)")
+    parser.add_argument('-t', '--tree', metavar='treefile', required=True,  help="single treefile in newick format")
+    parser.add_argument('-s', '--fasta', metavar='fas', nargs='+', required=True, 
+            help="fasta files with unaligned genomes from COGUK, GISAID")
+    parser.add_argument('-i', '--input', action="store", help="Directory where perobaDB files are. Default: working directory")
+    parser.add_argument('-o', '--output', action="store", help="Output database directory. Default: working directory")
+
+    args = parser.parse_args()
+    logging.basicConfig(level=args.loglevel)
+    if args.output: 
+        output_d = os.path.join(current_working_dir, args.output)
+        pathlib.Path(output_d).mkdir(parents=True, exist_ok=True) # python 3.5+ create dir if it doesn't exist
+    else: 
+        output_d = current_working_dir
+
+    if args.input: input_d = os.path.join(current_working_dir, args.input)
+    else: input_d = current_working_dir
+    prefix = os.path.join(input_d, common.prefix["database"])
+
+    prb_db = PerobaDatabase (treefile=args.tree, raw_metadata_filelist=args.metadata, 
+            sequence_filelist = args.fasta, prefix = prefix, peroba_db_path = output) 
+    prb_db.save_to_db_files () 
+
+    main()
+
+
+## belonged to add_local in peroba_backbone
+        csv["submission_org_code"] = "NORW"
+        csv["submission_org"] = "Norwich"
+        cols = [x for x in self.cols if x in csv.columns]
+        csv = csv[cols] # remove other columns
+        # global sequences with a match 
+        matched = self.g_csv[ metadata["central_sample_id"].isin(csv.index) ] # index of csv is "central_sample_id"
+        logger.info("Adding local data: from %s rows in local csv, %s have a match on global one", str(csv.shape[0]),str(self.g_csv.shape[0]))
+        name_dict = {x:y for x,y in zip(matched["central_sample_id"], matched["sequence_name"])}
+
+        for seq in sequence:
+            if seq.id in name_dict:
+                seq.id = name_dict[seq.id] # receive coguk long name
+                csv.loc[str(seq.id), "sequence_name"] = name_dict[seq.iq]   # ADD to local with long name
+                seqs_in_global.append (seq.id) # long name
+
+            if seq.id not in self.g_csv.index: # not a global seq mixed with local seqs
+                if seq.id not in csv.index: # sequences not in csv must be added to it
+                    logger.warning("Sequence %s was not found in local database, will be added by hand", seq.id)
+                    csv.loc[str(seq.id)] = pd.Series({'sequence_name':seq.iq, 
+                        'submission_org_code':"NORW",
+                        'submission_org':"Norwich"})
+                else: # seq.id is in index
+                    logger.info("New sequence %s not yet in local csv", seq.id)
+                    csv.loc[str(seq.id), "sequence_name"] = seq.iq   # ADD to local with short name
+
+            else:
+                logger.info("Sequence %s from local file is already on global database", seq.id)
+                if "NORW" in seq.id: ## we may consider using 'new' version instead of database one 
+                    seqs_in_global.append(seq.id)
+                else:
+                    seq.id = None
+        sequence = {x.id:x for x in sequence if x.id is not None}
+        csv.dropna (subset = ["sequence_name"], inplace = True) # local csv may contain info on rejected samples (w/o sequence) 
+        logger.info("After removing rows without matching sequences, local metadata has %s samples", str(csv.shape[0]))
+        csv, sequence = add_sequence_counts_to_metadata (csv, sequence, from_scratch=True) # seqname must be in index
+        
+        # merge sequences (align local first, since global are already aligned)
+        ref_seq = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/MN908947.3.fas")  
+        if replace: # align all, which will replace existing ones in g_seq
+            aln = minimap2_align_seqs([x for x in sequences.values()], reference_path=ref_seq)
+        else: # alignment will contain only those not found in global
+            aln = minimap2_align_seqs([x for x in sequences.values() if x.id not in seqs_in_global], reference_path=ref_seq)
+        logger.info("Finished aligning %s local sequences", str(len(aln)))
+        self.g_seq.update({x.id:x for x in aln})
+    
+        # merge metadata, to then spli into local and global datasets
+        csv["peroba_seq_uid"] = csv["sequence_name"]
+        csv.reset_index (drop=False, inplace=True) ## drop=False makes index (central_sample_id) become a column
+        csv.set_index (self.g_csv.index.names, drop = True, inplace = True) # drop to avoid an extra 'peroba_seq_uid' column
+        self.g_csv = common.df_merge_metadata_by_index (csv, self.g_csv) 
+
+        self.l_csv = self.g_csv[  self.g_csv["submission_org_code"].str.contains("NORW", na=False) ]
+        self.g_csv = self.g_csv[ ~self.g_csv["submission_org_code"].str.contains("NORW", na=False) ]
+        self.l_seq = {x.id:x for x in self.g_seq if x.id in self.l_csv["sequence_name"]}
+        self.g_seq = {x.id:x for x in self.g_seq if x.id in self.g_csv["sequence_name"]}
+        logger.info ("splitting data into %s global and %s local sequences", str(self.g_csv.shape[0]), str(self.l_csv.shape[0]))
+
+
+def df_read_genome_metadata (filename, primary_key = "sequence_name", rename_dict = "default", sep=',', compression="infer", 
+        index_name = "peroba_seq_uid", remove_edin = True, exclude_na_rows = None, exclude_columns = "default"):
+    ''' Read CSV data using "sequence_name" as primary key 
+    TODO: there are sequences with same name (e.g. distinct assemblies), currently only one is kept. 
+    I could create a column combination (multi-index?) to keep all
+    '''
+    if rename_dict == "default":
+        rename_dict = {
+            'sample_date':'collection_date',  # from cog_gisaid
+            'strain':'sequence_name',         # others below from GISAID
+            'date':'collection_date',
+            'sex':'source_sex',
+            'age':'source_age'}
+    if exclude_na_rows == "default": ## better NOT to set this up here (only at finalise_data())
+        exclude_na_rows = ['collection_date','sequence_name','lineage', 'adm2']
+    if exclude_columns == "default":
+        exclude_columns = ["is_travel_history","is_surveillance","is_hcw", "is_community", "outer_postcode", "travel_history"]
+
+    df1 = pd.read_csv (str(filename), compression=compression, sep=sep, dtype='unicode') # sep='\t' for gisaid
+
+    # fix column names  
+    if rename_dict:
+        for old, new in rename_dict.items():
+            if old in list(df1.columns): ## I expected pandas to do this check...
+                df1.rename(columns={old:new}, inplace=True)
+    if remove_edin: # EDINBURGH custom labels have an "edin" prefix
+        no_edin = {x:x.replace("edin_", "") for x in list(df1.columns) if x.startswith("edin_")}
+        df1.rename(columns=no_edin, inplace=True)
+
+    # reduce table by removing whole columns and rows with missing information
+    if exclude_na_rows: # list of important columns, such that rows missing it should be removed
+        important_cols = [x for x in exclude_na_rows if x in list(df1.columns)]
+        if important_cols:
+            df1.dropna (subset = important_cols, inplace = True);
+
+    #EX: exclude_columns = ["is_travel_history","is_surveillance","is_hcw", "is_community", "outer_postcode", "travel_history"]
+    if exclude_columns: # list of irrelevant columns
+        irrelevant_cols = [x for x in exclude_columns if x in list(df1.columns)]
+        if irrelevant_cols:
+            df1.drop (labels = irrelevant_cols, axis=1, inplace = True) # no sample with this information
+
+    # This must be relaxed if we want global statistics (no purging of incomplete rows)
+    if index_name not in list(df1.columns): # regular CSV file from external source
+        df1.set_index (str(primary_key), drop = False, inplace = True) # dont drop the column to be used as index
+        # now we have a column and an index with same name
+        df1.dropna (subset=[str(primary_key)], inplace = True); 
+        df1.rename_axis(str(index_name), inplace = True) # equiv. to df.index.name="peroba_seq_uid"
+    else:
+        df1.set_index (str(index_name), drop = True, inplace = True) # drop the column to avoid having both with same name
+    
+    if "collection_date" in df1.columns: ## keep most recent first (in case one has wrong date)
+        df1["collection_date"] = pd.to_datetime(df1["collection_date"], infer_datetime_format=True, yearfirst=True, errors='coerce')
+        df1.sort_values(by=["collection_date"], inplace = True, ascending=False)
+    
+    if "adm2" in df1.columns:
+        df1['adm2'] = df1['adm2'].str.title()
+    df1 = df1.groupby(df1.index).aggregate("first"); # duplicated indices are allowed in pandas
+    return df1

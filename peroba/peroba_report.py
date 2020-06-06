@@ -20,7 +20,7 @@ stream_log.setLevel(logging.DEBUG)
 logger.addHandler(stream_log)
 
 cwd = os.getcwd()
-template_dir = os.path.join( os.path.dirname(os.path.abspath(__file__)), "../report")
+template_dir = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/report")
 
 ## FIXME : I must destroy UK lineage etc from CSV (since I imputed it!)
 
