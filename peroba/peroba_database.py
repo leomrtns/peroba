@@ -47,7 +47,7 @@ class PerobaDatabase:
         if (len(metadata)): self.add_metadata (metadata)
         if (len(sequence)): self.add_sequences (sequence)
 
-    def save_to_db_files (self):
+    def save_to_db_files (self, alignment):
         logger.info("Full merge between sequences, metadata, and tree before saving database")
         self.merge_data_sequence ()
         self.merge_sequence_tree ()
@@ -96,10 +96,8 @@ class PerobaDatabase:
                         fw.write(str(f">{name}\n{seq}\n").encode())
                         rec.id = name ## make sure alignment will have same names
 
+            aln = self.update_alignment (alignment, seqs_per_block = 1000)
             fname = self.prefix + common.suffix["alignment"]
-            logger.info(f"Aligning sequences with mafft")
-            ref_seq = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/MN908947.3.fas")  
-            aln = align_sequences_from_dict (self.sequences, reference_file = ref_seq, seqs_per_block = 1000)
             logger.info(f"Saving alignment to file {fname}")
             with this_open(fname,"wb") as fw: 
                 for sequence in aln: # list of sequences (not dictionary as above) 
@@ -147,6 +145,28 @@ class PerobaDatabase:
         logger.info("Database now has %s valid sequences", str(len(self.sequences)))
         self.merge_data_sequence ()
         self.merge_sequence_tree ()
+
+    def update_alignment (self, alignment, seqs_per_block):
+        ref_seq = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/MN908947.3.fas")  
+        if alignment is None or len(alignment) < 1:
+            logger.info(f"Aligning all sequences with mafft (no alignment file found)")
+            aln = common.align_sequences_in_blocks ( [x for x in self.sequences.values()], reference_file = ref_seq, seqs_per_block=seqs_per_block)
+            return aln
+
+        aln = dict() # aln is dict but prealign is list
+        for f in alignment:
+            logger.info(f"Reading Alignment file {f}")
+            seqs = common.read_fasta (f, check_name = True) # list
+            aln.update({x.id:x for x in seqs})  #  duplicates are overwritten
+        
+        prealign = [x for x in aln.values() if x.id in self.sequences.keys()] 
+        prealn_names = [x.id for x in prealign]
+        remain = [x for x in self.sequences.values() if x.id not in prealn_names]
+        logger.info(f"From %s sequences, %s were found in alignment (originally with %s sequences)", 
+                len(self.sequences), len(prealign), len(aln))
+        logger.info(f"Aligning remaining sequences with mafft")
+        aln_list = common.align_sequences_in_blocks (remain, reference_file = ref_seq, seqs_per_block=seqs_per_block)
+        return prealign + aln_list
 
     def merge_data_sequence (self): # keep only intersection
         if self.sequences is None or self.metadata is None: return
@@ -198,20 +218,6 @@ class PerobaDatabase:
         ## remove table rows absent from tree or just mark tree as incomplete
         logger.debug("DataTree:: Tree will not be used to remove rows from metadata")
 
-def align_sequences_from_dict (sequences, reference_file, seqs_per_block = 2000): 
-    if seqs_per_block < 100:   seqs_per_block = 100
-    if seqs_per_block > 10000: seqs_per_block = 10000 # mafft chokes on large matrices (but 10k is fine btw)
-    seq_list = [x for x in sequences.values()]
-    nseqs = len(seq_list)
-    aligned = []
-    for i in range (0, nseqs, seqs_per_block):
-        last = i + seqs_per_block
-        if last > nseqs: last = nseqs
-        aln = mafft_align_seqs (seq_list[i:last], reference_file = reference_file)
-        aligned += aln
-        logger.info (f"First {last} sequences aligned")
-    return aligned
-
 class ParserWithErrorHelp(argparse.ArgumentParser):
     def error(self, message):
         sys.stderr.write('error: %s\n' % message)
@@ -247,6 +253,7 @@ def main():
     parser.add_argument('-t', '--tree', metavar='treefile', required=True,  help="single treefile in newick format")
     parser.add_argument('-s', '--fasta', metavar='fas', nargs='+', required=True, 
         help="fasta files with unaligned genomes from COGUK, GISAID")
+    parser.add_argument('-a', '--alignment', metavar='aln', nargs="+", help="aligned sequences from previous iteration (speeds up calculations)")
     parser.add_argument('-i', '--input', action="store", help="Directory where input files are. Default: working directory")
     parser.add_argument('-o', '--output', action="store", help="Output database directory. Default: working directory")
     parser.add_argument('-f', '--force-pruning', dest = "force", default=False, action='store_true', 
@@ -267,9 +274,10 @@ def main():
     tree = fill_file_location (args.tree, input_d)
     meta = fill_file_location (args.metadata, input_d)
     fasta = fill_file_location (args.fasta, input_d)
+    align = fill_file_location (args.alignment, input_d)
 
     prb_db = PerobaDatabase (tree = tree, metadata = meta, sequence = fasta, prefix = prefix, pruning = args.force) 
-    prb_db.save_to_db_files () 
+    prb_db.save_to_db_files (align) ## alignment added only here 
 
 if __name__ == '__main__':
     main()

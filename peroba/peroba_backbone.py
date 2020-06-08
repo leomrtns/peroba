@@ -97,6 +97,7 @@ class PerobaBackbone:
                     seqs_in_global.append (seq.id) 
                 else: ## will be added through a new_rows dataframe
                     s_new.append (seq.id)
+                    print ("DEBUG:: ", seq.id)
                     #self.g_csv.loc[str(seq.id)] = pd.Series({'sequence_name':seq.id, 'central_sample_id':seq.id,'submission_org_code':"NORW", 'submission_org':"Norwich"})
             else: # sequence has long, official name
                 if "NORW" in seq.id: ## we only consider replacing local seqs, otherwise database migth have newer  
@@ -106,7 +107,7 @@ class PerobaBackbone:
                     seq.id = None
 
         if len(s_new) > 0:
-            logger.warning("Sequences not found in global database will be added by hand:\n%s\n", "\t".join(s_new))
+            logger.warning("Sequences not found in global database will be added by hand:\n%s\n", "   ".join(s_new))
             new_rows = pd.DataFrame({'peroba_seq_uid':s_new, 'sequence_name': s_new, 'central_sample_id':s_new,
                 'submission_org_code':"NORW" ,'submission_org':"Norwich"})
             new_rows = new_rows.groupby("peroba_seq_uid").aggregate("first") # duplicate sequences --> this makes peroba_seq_uid the index 
@@ -143,7 +144,7 @@ class PerobaBackbone:
 
         # merge sequences (align local first, since global are already aligned)
         ref_seq = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/MN908947.3.fas")  
-        aln = minimap2_align_seqs(seq_list, reference_path=ref_seq)
+        aln = common.align_sequences_in_blocks (seq_list, reference_file = ref_seq, seqs_per_block = 1000)
         logger.info("Finished aligning %s local sequences", str(len(aln)))
         self.g_seq.update({x.id:x for x in aln})
 
@@ -204,6 +205,7 @@ class PerobaBackbone:
         self.sort_categories()
         logger.info("Finding SNPs to speed up calculations")
         snp_aln = snpsites_from_alignment ([x for x in self.g_seq.values()], strict=strict)
+        logger.info("In total %s SNPs were found (i,e, alignment size)", len(snp_aln[0].seq))
 
         logger.info ("Splitting data into global and local (NORW)")
         self.l_csv = self.g_csv[  self.g_csv["submission_org_code"].str.contains("NORW", na=False) ]
@@ -277,9 +279,10 @@ class PerobaBackbone:
             else:
                 self.trees.append(t)
         # copy of user-defined trees that don't get pruned
-        self.usrtrees = []
-        for t in self.trees[1:]:
-            self.usrtrees.append( treeswift.read_tree_newick (str(t)) ) ## copy 
+        if len(self.trees) > 1:
+            self.usrtrees = []
+            for t in self.trees[1:]:
+                self.usrtrees.append( treeswift.read_tree_newick (str(t)) ) ## copy 
 
     def remove_duplicates (self, blocks = 4, leaf_size = 500, radius=0.00001):
         logger.info("Removing duplicates (identical sequences)")
@@ -367,11 +370,14 @@ def save_global_from_seqnames (bb, seqnames, prefix):
     # format(colour_string(desc).ljust(32, ' ')) # not using ljust anymore
     desc  = "{}\n Aligned sequences selected from global data\n".format(colour_string(desc))
     fname = os.path.basename(fname)
-    desc += "{}\n Pruned trees, with leaves only from global data (for phylo inference, see 'user' trees)\n".format(colour_string(fname))
+    desc += "{}\n Pruned trees, with leaves only from global data (please refer to 'user' trees below for phylo inference)\n".format(colour_string(fname))
     desc += " First tree is full tree from COGUK, remaining trees are provided from user, if any\n"
     return desc + "\n"
 
 def save_user_trees (bb, seqnames, prefix, add_nj_tree = False):
+    if bb.usrtrees is None:
+        logger.info ("No user-defined trees, skipping creation of custom data set")
+        return "" 
     logger.info ("Saving user-defined trees with added sequences")
     leafnames = set([l.get_label() for t in bb.usrtrees for l in t.traverse_leaves()])
     aln = {x:y for x,y in bb.g_seq.items() if x in leafnames}
@@ -390,7 +396,7 @@ def save_user_trees (bb, seqnames, prefix, add_nj_tree = False):
     aln.update({x:y for x,y in bb.l_seq.items()})
     desc = save_sequences (aln, prefix)
     desc  = "{}\n alignment with sequences from all user-defined trees (that I have access to), as well as all \n".format(colour_string(desc))
-    desc += " global and local sequences \n".
+    desc += " global and local sequences.\n"
 
     logger.info ("In total, %s sequences are part of the user-defined data set (user trees plus sequences found here)",
             str(len(aln)))
@@ -419,7 +425,7 @@ def save_all_sequences (bb, seqnames, prefix, add_nj_tree = True):
     aln = {x:y for x,y in bb.g_seq.items() if x in seqnames}
     aln.update({x:y for x,y in bb.l_seq.items()})
     desc = save_sequences (aln, prefix)
-    desc = "{}: alignment with (all) local and (selected) global sequences (main output of program)\n".format(colour_string(desc))
+    desc = "{}\n alignment with (all) local and (selected) global sequences. This is main output of program\n".format(colour_string(desc))
     logger.info ("Total of %s sequences will form the local+global data set", str(len(aln)))
 
     if add_nj_tree:
@@ -495,7 +501,7 @@ def main_generate_backbone_dataset (database, csv, sequences, trees, replace, pr
     desc = save_sequences (bb.l_seq, prefix + "norw")
     description += "{}\n alignment with all local sequences only\n".format(colour_string(desc))
 
-    print ("Finished. The output files are described below, where 'global' means COGUK and GISAID data which were\n")
+    print ("Finished. The output files are described below, where 'global' means COGUK and GISAID data which were ")
     print ("{} generated in NORW. Those, together with the extra sequences are being called'local'.".format(colour_string("not", "red")))
     print (f"Files produced:\n{description}")
     

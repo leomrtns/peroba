@@ -29,7 +29,7 @@ template_dir = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/r
 def tex_formattted_string (string): # YAML header is translated into latex by pandoc; we have to tell it's already translated
     return "\"`" + string + "`{=latex}\""  # returns  "`/usr/file_name.txt`{=latex}"
 
-def plot_over_clusters (csv, tree, min_cluster_size = None, output_dir=None):
+def plot_over_clusters (csv, tree, min_cluster_size = None, output_dir=None, figdir=None, pdf_report_name = None):
     if output_dir is None: output_dir = cwd
     if min_cluster_size is None: min_cluster_size = 5
     df = csv.copy()
@@ -38,9 +38,11 @@ def plot_over_clusters (csv, tree, min_cluster_size = None, output_dir=None):
 ## Phylogenetic clusters\n
 Only clusters with more than {minc_size} elements are shown.
 """.format (minc_size = min_cluster_size)
+    html_desc = pdf_desc = md_description 
 
-    sub_csv, sub_tree, this_description, csv = phylo.ASR_subtrees (csv, tree)
-    md_description += this_description
+    sub_csv, sub_tree, md_description, csv = phylo.ASR_subtrees (csv, tree)
+    html_desc += md_description # same text in markdown
+    pdf_desc  += md_description
 
     logger.info("Decorating tree before plotting all clusters")
     colmap_dict = phylo.colormap_from_dataframe (csv)
@@ -49,20 +51,36 @@ Only clusters with more than {minc_size} elements are shown.
     logger.info("Entering loop over clusters found; sit tight!")
     for i,(c,t) in enumerate(zip(sub_csv,sub_tree)):
         if len(c) > min_cluster_size:
-            md_description += f"\n### Cluster {i}\n"
-            md_description += phylo.plot_single_cluster (c, t, i, ts, output_dir)
+            md_description = f"\n### Cluster {i}\n"
+            html_desc += md_description
+            pdf_desc  += md_description
+            hdesc, pdesc = phylo.plot_single_cluster (c, t, i, ts, output_dir, figdir)
+            html_desc += hdesc; pdf_desc += pdesc
 
-            md_description += stdraw.plot_bubble_per_cluster (c, i, output_dir)
+            hdesc, pdesc = stdraw.plot_bubble_per_cluster (c, i, output_dir, figdir)
+            html_desc += hdesc; pdf_desc += pdesc
             
-            md_description += stdraw.plot_time_heatmap (c, i, output_dir)
+            hdesc, pdesc = stdraw.plot_time_heatmap (c, i, output_dir, figdir)
+            html_desc += hdesc; pdf_desc += pdesc
             
-            md_description += stdraw.plot_postcode_map (c, i, output_dir)
+            hdesc, pdesc = stdraw.plot_postcode_map (c, i, output_dir, figdir)
+            html_desc += hdesc; pdf_desc += pdesc
 
-    md_description += """
+    html_desc +=f"""
+## Files for download
+\n[Full tree, available for download due to its large size](./{figdir}/full_tree.pdf)\n<br>
+\n[This report, in PDF format](./{pdf_report_name})\n<br>
+"""
+    pdf_desc +="""
+The complete phylogenetic tree is displayed in a separate document due to its large size.<br>\n"""
 
-The complete phylogenetic tree is displayed in a separate document due to its large size.<br>
+    tree.render(os.path.join(output_dir,f"{figdir}/full_tree.pdf"), w=1200, tree_style=ts)
 
-\n<br>(report generated at {today})<br>
+    return html_desc, pdf_desc, csv 
+
+def finalise_report ():
+    md_description = """
+\n## Timestamp: {today}<br>
 Care must be taken when interpreting due to the phylogenetic uncertainty (many similar sequences, with ambiguous sites,
 incomplete sampling, and other statistical caveats), and also due to the incomplete nature of the phylogenetic 
 metadata: sequences failing sequencing quality and phylogenetic quality (excess of `N`s etc) are not
@@ -73,9 +91,7 @@ inferred to be relevant to the regional analysis, and even those may be removed 
 
 Software still under development.<br>
 """.format(today=datetime.datetime.now().strftime("%Y-%m-%d %H:%M")) 
-    tree.render(os.path.join(output_dir,"full_tree.pdf"), w=1200, tree_style=ts)
-
-    return md_description, csv 
+    return md_description
 
 def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
     """
@@ -99,13 +115,13 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
     matched = metadata[ metadata["central_sample_id"].isin(csv.index) ] # index of csv is "central_sample_id"
     csv["submission_org_code"] = "NORW"
     csv["submission_org"] = "Norwich"
-
+    
     leaf_names = [x for x in tree_leaves.keys()] # some will be updated below to COGUK format, some are already in COGUK format
     seqs_not_in_tree = dict()  ## NORW sequences that should be in tree but are not
     # change leaf names whenever possible (i.e. they match to 'official' COGUK long names)
     for shortname, longname  in zip(matched["central_sample_id"], matched["sequence_name"]):
         if shortname in leaf_names: # leaf_names is a list; if x in y means x==z for some z in y (!= 'A' in 'ZAPPA')
-            tree_leaves[str(shortname)].name = longname # leaf names E9999 --> England/E9999/2020
+            tree_leaves[str(shortname)].name = longname # leaf names NORW-E9999 --> England/NORW-E9999/2020
         else:
             if longname not in leaf_names: 
                 seqs_not_in_tree[str(shortname)] = longname
@@ -114,20 +130,17 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
 #    norwseqnames = [x.id for x in seq_matrix]
     if len(seqs_not_in_tree):
         tbl_debug = [f"[DEBUG]\t{x}\t{y}" for x,y in seqs_not_in_tree.items()]
-        logger.warning("%s\tsamples from NORW in metadata were not found on tree (excluded from analysis due to low quality?)", len(tbl_debug))
+        logger.warning("%s\tsamples in local (csv) metadata were not found on tree (excluded from analysis due to low quality?)", len(tbl_debug))
         logger.debug("And the sequences are\n%s", "\n".join(tbl_debug))
 
-    # remove csv rows not present in tree
-    csv = csv[ csv.index.isin(leaf_names) ]
-    logger.info("Number of NORW samples present in tree (according to CSV and global metadata): %s", len(csv))
     ## temporarily use central_sample_id as index, so that we can merge_by_index
     matched.reset_index(inplace=True) ## downgrades current index to a regular column
     matched.set_index ("central_sample_id", append=False, drop = True, inplace = True) # append creates a new col w/ index 
-    # delete empty columns
-    csv.dropna      (axis=1, how='all', inplace=True) # currently, useless columns
-    matched.dropna  (axis=1, how='all', inplace=True) # with NA only 
+    #matched.dropna  (axis=1, how='all', inplace=True) ## delete empty columns with NA only 
+
     ## merge csv with corresponding elements from global metadata (note that these are just intersection with csv)
     csv = common.df_merge_metadata_by_index (csv, matched) 
+    
     # replace receive leaf names in case it's NORW-E996C 
     csv["peroba_seq_uid"] = csv["peroba_seq_uid"].fillna(csv.index.to_series())
     csv["sequence_name"] = csv["sequence_name"].fillna(csv.index.to_series())
@@ -139,7 +152,6 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
     # merge with COGUK 
     csv = common.df_merge_metadata_by_index (csv, metadata) 
 
-    csv["collection_date"] = pd.to_datetime(csv["collection_date"], infer_datetime_format=True, yearfirst=True, errors='coerce')
     #csv['days_since_Dec19'] = csv['collection_date'].map(lambda a: get_days_since_2019(a, impute = False))
     csv['days_since_Dec19'] = csv['collection_date'].map(lambda a: (a - datetime.datetime(2019,12, 1)).days) 
 
@@ -154,7 +166,8 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
         id_meta = set(csv.index.array) # <PandasArray> object, works like an np.array
         id_leaves = set([x for x in tree_leaves.keys()]) 
         only_in_tree = list(id_leaves - id_meta)
-        logger.warning("Removing unmapped leaves from dictionary. List of unmapped leaves:\n%s", "\n".join(only_in_tree))
+        logger.warning("Removing %s unmapped leaves from dictionary", str(len(only_in_tree)))
+        logger.debug("List of unmapped leaves:\n%s", "\t".join(only_in_tree))
         for i in only_in_tree:
             del tree_leaves[i]
         logger.info("Will now prune these leaves from tree.")
@@ -182,16 +195,31 @@ def merge_original_with_extra_cols (csv_original, metadata):
     df = df.merge(csv_original, on="central_sample_id")
     return df  ## no csv_original were harmed in this function
 
-def main_prepare_report_files (metadata0, csv0, tree, tree_leaves, input_dir, output_dir, title_date):
-    mkd_file_name = os.path.join(output_dir,f"report_{title_date}.md")
-    pdf_file_name = os.path.join(output_dir,f"report_{title_date}.pdf")
-    csv_file_name = os.path.join(output_dir,f"csv_{title_date}.csv.gz")
-    meta_file_name = os.path.join(output_dir,f"metadata_{title_date}.csv.gz")
-    titlepage_name = os.path.join(input_dir,"titlepage-fig.pdf")
-    pagebackground_name = os.path.join(input_dir,"letterhead-fig.pdf")
-    pandoc_template_name = os.path.join(input_dir,"eisvogel")
-    
-    md_description = """
+def markdown_headers (input_dir, output_dir, title_date, figdir):
+    # tex_formatted_string() protects from YAML substitution 
+    titlepage_name = tex_formattted_string(os.path.join(input_dir,"titlepage-fig.pdf"))
+    pagebackground_name = tex_formattted_string(os.path.join(input_dir,"letterhead-fig.pdf"))
+
+    runstr = f"cp {template_dir}/pandoc3.css {output_dir}/pandoc.css; cp {template_dir}/QIlogo_light.png {output_dir}/{figdir}/logo.png"
+    proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)
+
+    html_description = """
+---
+title: |
+  ![]({figdir}/logo.png){{width=2in}} Phylogenomic Report on SARS-CoV2 in Norfolk area
+
+author: [Leonardo de Oliveira Martins]
+date: "{title_date}"
+keywords: [Markdown, SARS-CoV19]
+css:
+- pandoc.css
+toc-depth: 2
+to: html5
+from: markdown
+...
+""".format(figdir = figdir, title_date = title_date) 
+
+    pdf_description = """
 ---
 title: "Phylogenomic Report on SARS-CoV2 in Norfolk area"
 author: [Leonardo de Oliveira Martins]
@@ -214,41 +242,72 @@ geometry:
 - heightrounded
 ...
 # Report for {title_date}
-""".format(title_date = title_date, 
-            titlepage=tex_formattted_string(titlepage_name), # protects from YAML substitution 
-            pagebackground=tex_formattted_string(pagebackground_name))
-## for landscape (use \blscape and /elscape within markdown, however it rotates layout (header, footer)
-#header-includes: |
-#    \usepackage{pdflscape}
-#    \newcommand{\blscape}{\begin{landscape}}                                                                                                                  
-#    \newcommand{\elscape}{\end{landscape}} 
-#...
-#\blscape 
+""".format(title_date = title_date, titlepage=titlepage_name, pagebackground=pagebackground_name)
+    ## for landscape (use \blscape and /elscape within markdown, however it rotates layout (header, footer)
+    #header-includes: |
+    #    \usepackage{pdflscape}
+    #    \newcommand{\blscape}{\begin{landscape}}                                                                                                                  
+    #    \newcommand{\elscape}{\end{landscape}} 
+    #...
+    #\blscape 
+    return html_description, pdf_description
 
-    report_fw = open (mkd_file_name, "w")
-    report_fw.write(md_description)
+def main_prepare_report_files (metadata0, csv0, tree, tree_leaves, input_dir, output_dir, title_date):
+    # report files
+    mkd_htm_file = os.path.join(output_dir,f"_htm_{title_date}.md")
+    mkd_pdf_file = os.path.join(output_dir,f"_pdf_{title_date}.md")
+    pdfreportname = f"report_{title_date}.pdf"
+    pdf_file_name = os.path.join(output_dir,pdfreportname)
+    htm_file_name = os.path.join(output_dir,f"report_{title_date}.html")
+    pandoc_template_name = os.path.join(input_dir,"eisvogel")
+    # output table files
+    csv_file_name = os.path.join(output_dir,f"csv_{title_date}.csv.gz")
+    meta_file_name = os.path.join(output_dir,f"metadata_{title_date}.csv.gz")
+   
+    figdir = "figures"
+    pathlib.Path(f"{output_dir}/{figdir}").mkdir(parents=True, exist_ok=True)
+    html_desc, pdf_desc =  markdown_headers (input_dir, output_dir, title_date, figdir)
+
+    fw_htm = open (mkd_htm_file, "w")
+    fw_pdf = open (mkd_pdf_file, "w")
+    fw_htm.write(html_desc)
+    fw_pdf.write(pdf_desc)
 
     ## prepare data (merging, renaming) csv0 WILL BE MODIFIED to remove columns from prev week
     metadata, csv, tree, tree_leaves = merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves)
     ## start plotting 
-    md_description, csv = plot_over_clusters (csv, tree, min_cluster_size = 10, output_dir=output_dir)
+    html_desc, pdf_desc, csv = plot_over_clusters (csv, tree, min_cluster_size = 10, output_dir=output_dir, 
+            figdir=figdir, pdf_report_name = pdfreportname)
+    fw_htm.write(html_desc)
+    fw_pdf.write(pdf_desc)
+
     metadata = phylo.save_metadata_inferred (metadata, tree)
     csv = merge_original_with_extra_cols (csv0, metadata)
     csv.to_csv (csv_file_name)
     metadata.to_csv (meta_file_name)
 
-    report_fw.write(md_description)
-    md_description = stdraw.plot_jitter_lineages (metadata, output_dir)
-    report_fw.write(md_description)
-    md_description = stdraw.plot_genomes_sequenced_over_time (metadata, output_dir)
-    report_fw.write(md_description)
+    html_desc, pdf_desc = stdraw.plot_jitter_lineages (metadata, output_dir, figdir)
+    fw_htm.write(html_desc)
+    fw_pdf.write(pdf_desc)
+    
+    html_desc, pdf_desc = stdraw.plot_genomes_sequenced_over_time (metadata, output_dir, figdir)
+    fw_htm.write(html_desc)
+    fw_pdf.write(pdf_desc)
 
-    #md_description = "\n\end{pdflscape}"
-    #report_fw.write(md_description)
+    description = finalise_report ()
+    fw_htm.write(description)
+    fw_pdf.write(description)
 
-    report_fw.close()
+    fw_htm.close()
+    fw_pdf.close()
 
-    runstr = f"cd {output_dir} && pandoc {mkd_file_name} -o {pdf_file_name} --from markdown --template {pandoc_template_name} --listings"
+    # pdf pandoc (using eisvogel)
+    runstr = f"cd {output_dir} && pandoc {mkd_pdf_file} -o {pdf_file_name} --from markdown --template {pandoc_template_name} --listings"
+    logger.info("running command:: %s", runstr)
+    proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)
+    logger.debug("output verbatim:\n%s",proc_run)
+    # html pandoc (using embedded css)
+    runstr = f"cd {output_dir} && pandoc -s {mkd_htm_file} -o {htm_file_name} --toc"
     logger.info("running command:: %s", runstr)
     proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)
     logger.debug("output verbatim:\n%s",proc_run)

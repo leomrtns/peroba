@@ -145,17 +145,16 @@ def columnwise_color_scheme (df0):
 
     df["area_code"] = df["submission_org_code"].map(lambda a: "inter" if pd.isnull(a) else str(len(a) > 0)) # coguk 
     df.loc[df["adm2"].str.contains("folk", na=False) , "area_code"] = "folk"
-    df["icu_admission"] = df["icu_admission"].str.replace("Unknown","?")
     df["age_range"] = pd.qcut(pd.to_numeric(df['source_age'], errors='coerce'), 5).astype(str)
     df["collection_week"] = df["collection_date"].dt.week.astype(str)
-    df["source_age"] = df["source_age"].str.split('.').str[0]
+    #df["source_age"] = df["source_age"].str.split('.').str[0] # this is before I fixed columns as_numeric
     # color bar width, label column, column title, coded labels, n1 n2 for color table
     clist = [[50, "Area", "adm2", "area_code", 0, 2]] 
     clist.append([40, "Lineages", "peroba_lineage", "peroba_lineage", 3, 3]) ## you can use same column again
     clist.append([40, "Hospital", "collecting_org", "collecting_org", 6, 2])
-    clist.append([15, "ICU", "icu_admission", "icu_admission", 8, 2])
+    clist.append([15, "ICU", "is_icu_patient", "is_icu_patient", 8, 2])
     #clist.append([15, "Age", "source_age",    "age_range",    11, 2])
-    clist.append([15, "Age", "source_age",    "source_age",    10, 3])
+    clist.append([20, "Age", "source_age",    "source_age",    10, 3])
     clist.append([50, "Collection Date", "collection_date", "collection_week", 13, 2])
 
     return df, clist
@@ -170,8 +169,7 @@ def colormap_from_dataframe (df0):
     d_col = {} # dict of colour
     # trio: column with labels, column title, column w/ label to be mapped to colour, and colourset indices
     for i, (c, code, n1, n2) in enumerate(trio_names): 
-        uniq = df[code].unique()
-        print (code, uniq)
+        uniq = df[code].sort_values().unique()
         colorlist = common.list_from_custom_colorset(n1, n2, len(uniq))
         d_col[c] = {name:colors.to_hex(col) for name,col in zip(uniq, colorlist)} ## each value is another dict from csv elements to colors
     
@@ -218,8 +216,8 @@ def return_treestyle_with_columns (cmapvector):
             ete3.add_face_to_node(ete3.AttrFace("name", fsize=label_font_size, text_suffix="   "), node, 0, position="aligned")
             for column, (rgb_val, lab, wdt) in enumerate(zip(d_seq_color[node.name], d_seq_label[node.name], rect_width)): 
                 label = {"text": lab[:10], "color":"Black", "fontsize": label_font_size-1}
-                ete3.add_face_to_node (ete3.RectFace (wdt, 11, fgcolor=rgb_val, bgcolor=rgb_val, label = label), node, 2*column+1, position="aligned")
-                ete3.add_face_to_node (ete3.RectFace (2, 11, fgcolor="#ffffff", bgcolor="#ffffff", label = ""), node, 2*column+2, position="aligned")
+                ete3.add_face_to_node (ete3.RectFace (wdt, 12, fgcolor=rgb_val, bgcolor=rgb_val, label = label), node, 2*column+1, position="aligned")
+                ete3.add_face_to_node (ete3.RectFace (2, 12, fgcolor="#ffffff", bgcolor="#ffffff", label = ""), node, 2*column+2, position="aligned")
         else:
             node.img_style['size'] = 0; 
 
@@ -242,7 +240,7 @@ def return_treestyle_with_columns (cmapvector):
     for col, label in enumerate(column_names): # the first are tip labels
         labelFace = ete3.TextFace(label, fsize=9, fgcolor="DimGray") # fsize controls interval betweel columns
         labelFace.rotation = 270
-        labelFace.vt_align = 2  # 0 top, 1 center, 2 bottom
+        labelFace.vt_align = 1  # 0 top, 1 center, 2 bottom
         labelFace.hz_align = 1  # 0 left, 1 center, 2 right 
         ts.aligned_header.add_face(labelFace, 2 * col + 1)
     return ts
@@ -312,23 +310,26 @@ def prepare_csv_columns_for_asr (csv, csv_cols=None):
     logger.info ("Follow-up columns found in CSV: %s", " ".join(csv_cols))
     return csv, csv_cols
 
-def plot_single_cluster (csv, tree, counter, ts = None, output_dir=None):
+def plot_single_cluster (csv, tree, counter, ts = None, output_dir=None, figdir=None):
     if output_dir is None: output_dir = cwd
     exclude=["Postcode","Repeat Sample ID", "acc_lineage", "submission_org_code", "subsample_omit","swab_site","title","url","virus"]
     exclude = [x for x in csv.columns if x in exclude]
 
-    fname = f"tree{counter}.pdf"
     df = csv.drop (labels = exclude, axis=1)
     df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-    
-    tree.render(os.path.join(output_dir,fname), w=800, tree_style=ts)
-
     caption = f"Tree of cluster {counter}, with red branches connecting samples sequenced in NORW."
-    md_description = f"\n![{caption}]({fname})\n\n"
+
+    fname = f"{figdir}/tree{counter}.pdf"
+    tree.render(os.path.join(output_dir,fname), w=800, tree_style=ts)
+    pdf_desc = f"\n![{caption}]({fname})\n\n"
+    fname = f"{figdir}/tree{counter}.png"
+    tree.render(os.path.join(output_dir,fname), w=1400, tree_style=ts)
+    html_desc = f"\n![{caption}]({fname}){{ width=100% }}\n\n<br>"
+
     # report_md += df.to_html(max_rows=4, max_cols=20)
     # report_md += "<hr>\n"
 
-    return md_description
+    return html_desc, pdf_desc 
 
 def save_metadata_inferred (df, tree, csv_cols = None):
     ## write only a copy of the original column, since here we also mix imputed values

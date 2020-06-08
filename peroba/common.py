@@ -12,6 +12,7 @@ import numpy as np, pandas as pd
 from Bio import Seq, SeqIO
 import datetime, sys, lzma, gzip, bz2, re, glob, collections, subprocess, os, itertools, pathlib, base64
 import pandas_profiling # ProfileReport
+from utils import * 
 
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False
@@ -36,11 +37,14 @@ qi_logo_file = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/r
  
 #asr_cols = ["adm2", "uk_lineage", "lineage", "phylotype", "submission_org_code", "date_sequenced", "source_age", "source_sex", "collecting_org", "ICU_admission"]
 
+
 # For nabil, these must be on our output csv: peroba_uk_lineage    peroba_lineage    peroba_phylotype    peroba_special_lineage  central_sample_id
 # therefore these go to master sheet and come back without "peroba_" on following week
 asr_cols = ["uk_lineage", "lineage", "phylotype"]  
 # therefore we exclude the following columns from local (a.k.a. master table), since these must be from global metadata if present
-remove_from_master_cols = ["uk_lineage", "lineage", "phylotype", "special_lineage", "acc_lineage", "del_lineage"]
+remove_from_master_cols = ["uk_lineage", "lineage", "phylotype", "special_lineage", "acc_lineage", "del_lineage",
+        "primary_uk_lineage"] # new on 2020.06.08
+
 dtype_numeric_cols = [
         'gaps', 'length', 'edin_epi_week', 'epi_week', 'layout_insert_length', 'layout_read_length', 'missing', 
         'source_age', 'virus', 'lineage_support',  # upstream  (coguk+gisaid)
@@ -56,6 +60,7 @@ dtype_datetime_cols = ["date_submitted", "collection_date", "received_date", "se
     
 def metadata_to_html (df0, filename, description):
     df = set_dtypes_metadata (df0)
+    df.dropna  (axis=1, how='all', inplace=True) # delete empty columns
     covrge = "Coverage (X)" ## must remove ending X (e.g. 2000X)
     if covrge in df.columns:
         df[covrge] =  pd.to_numeric(df[covrge].str[:-1])
@@ -115,6 +120,19 @@ def read_fasta (filename, fragment_size = 0, check_name = False):
     logger.info("Read %s sequences from file %s", str(len(unaligned)), filename)
     return unaligned
 
+def align_sequences_in_blocks (sequences, reference_file, seqs_per_block = 2000): 
+    if seqs_per_block < 100:   seqs_per_block = 100
+    if seqs_per_block > 10000: seqs_per_block = 10000 # mafft chokes on large matrices (but 10k is fine btw)
+    nseqs = len(sequences)
+    aligned = []
+    for i in range (0, nseqs, seqs_per_block):
+        last = i + seqs_per_block
+        if last > nseqs: last = nseqs
+        aln = mafft_align_seqs (sequences[i:last], reference_file = reference_file)
+        aligned += aln
+        logger.info (f"First {last} sequences aligned")
+    return aligned
+
 def set_dtypes_metadata (df0):
     df = df0.copy()
     columns = [x for x in dtype_numeric_cols if x in df.columns]
@@ -136,6 +154,9 @@ def replace_values_metadata (df0):
         df["adm2"] = df["adm2"].replace(["Unknown Source","Unknown"],"")
         df["adm2"] = df["adm2"].replace({"Greater_London":"Greater London"}) # "Hertfordshire" != "Herefordshire"
         #df['adm2'].fillna(df.country, inplace=True)
+    if "is_icu_patient" in df.columns:
+        df["is_icu_patient"] = df["is_icu_patient"].str.replace("Unknown","?")
+
     #df["uk_lineage"] = df["uk_lineage"].replace(np.nan, "x", regex=True) 
     return df
  
@@ -279,6 +300,41 @@ def add_sequence_counts_to_metadata (metadata, sequences, from_scratch = None):
             metadata.loc[metadata["peroba_freq_acgt"].isnull(), "peroba_freq_acgt"] = nilvalues 
 
     return metadata, sequences
+
+def merge_global_and_local_metadata (metadata0, csv0):
+    """
+    Local (NORW) sequences are named NORW-EXXXX, which is central_sample_id. We match those to COGUK whenever possible.
+    This adds all our local info to the database, i.e. not only the ones with corresponding sequence 
+    (local csv includes info on 'rejected' or not sequenced samples)
+    """
+    metadata = metadata0.copy()
+    csv = csv0.copy()
+
+    logger.info("Merging global metadata (COGUK+GISAID usually) with local one (NORW)")
+    remove_cols = [c for c in remove_from_master_cols if c in csv.columns]  ## imputed values from previous iteration
+    if len(remove_cols):
+        csv.drop (labels = remove_cols, axis=1, inplace = True) 
+
+    matched = metadata[ metadata["central_sample_id"].isin(csv.index) ] # index of csv is "central_sample_id"
+    csv["submission_org_code"] = "NORW"
+    csv["submission_org"] = "Norwich"
+    
+    ## temporarily use central_sample_id as index, so that we can merge_by_index
+    matched.reset_index(inplace=True) ## downgrades current index to a regular column
+    matched.set_index ("central_sample_id", append=False, drop = True, inplace = True) # append creates a new col w/ index 
+    ## merge csv with corresponding elements from global metadata (note that these are just intersection with csv)
+    csv = df_merge_metadata_by_index (csv, matched) 
+    
+    # replace receive leaf names in case it's NORW-E996C 
+    csv["peroba_seq_uid"] = csv["peroba_seq_uid"].fillna(csv.index.to_series())
+    csv["sequence_name"] = csv["sequence_name"].fillna(csv.index.to_series())
+    #csv[metadata.index.names[0]] = csv[metadata.index.names[0]].fillna(csv.index.to_series()) # same as above
+
+    ## revert index to same as global metadata ("peroba_seq_uid" usually)
+    csv.reset_index (drop=False, inplace=True) ## drop=True means drop index completely, not even becomes a column
+    csv.set_index (metadata.index.names, drop = True, inplace = True) # drop to avoid an extra 'peroba_seq_uid' column
+    metadata = df_merge_metadata_by_index (metadata, csv) 
+    return metadata, csv
 
 def transparent_cmap (color = None, cmap = None, final_alpha = None):
     # http://stackoverflow.com/questions/10127284/overlay-imshow-plots-in-matplotlib
