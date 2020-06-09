@@ -10,7 +10,6 @@ import phylodrawing as phylo
 import statsdrawing as stdraw
 import common
 
-
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False
 stream_log = logging.StreamHandler()
@@ -29,10 +28,10 @@ template_dir = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/r
 def tex_formattted_string (string): # YAML header is translated into latex by pandoc; we have to tell it's already translated
     return "\"`" + string + "`{=latex}\""  # returns  "`/usr/file_name.txt`{=latex}"
 
-def plot_over_clusters (csv, tree, min_cluster_size = None, output_dir=None, figdir=None, pdf_report_name = None):
+def plot_over_clusters (metadata, tree, min_cluster_size = None, output_dir=None, figdir=None, pdf_report_name = None):
     if output_dir is None: output_dir = cwd
     if min_cluster_size is None: min_cluster_size = 5
-    df = csv.copy()
+    df = metadata.copy()
 
     md_description = """
 ## Phylogenetic clusters\n
@@ -40,16 +39,17 @@ Only clusters with more than {minc_size} elements are shown.
 """.format (minc_size = min_cluster_size)
     html_desc = pdf_desc = md_description 
 
-    sub_csv, sub_tree, md_description, csv = phylo.ASR_subtrees (csv, tree)
+    # df will be metadata with extra peroba_ columns (and sub_df is for each subtree)
+    sub_df, sub_tree, md_description, df = phylo.ASR_subtrees (df, tree)
     html_desc += md_description # same text in markdown
     pdf_desc  += md_description
 
     logger.info("Decorating tree before plotting all clusters")
-    colmap_dict = phylo.colormap_from_dataframe (csv)
+    colmap_dict = phylo.colormap_from_dataframe (df)
     ts = phylo.return_treestyle_with_columns (colmap_dict)
 
     logger.info("Entering loop over clusters found; sit tight!")
-    for i,(c,t) in enumerate(zip(sub_csv,sub_tree)):
+    for i,(c,t) in enumerate(zip(sub_df,sub_tree)):
         if len(c) > min_cluster_size:
             md_description = f"\n### Cluster {i}\n"
             html_desc += md_description
@@ -76,7 +76,7 @@ The complete phylogenetic tree is displayed in a separate document due to its la
 
     tree.render(os.path.join(output_dir,f"{figdir}/full_tree.pdf"), w=1200, tree_style=ts)
 
-    return html_desc, pdf_desc, csv 
+    return html_desc, pdf_desc, df 
 
 def finalise_report ():
     md_description = """
@@ -95,77 +95,35 @@ Software still under development.<br>
 
 def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
     """
-    Local (NORW) sequences are named NORW-EXXXX, which is central_sample_id. We match those to COGUK when possible
-    This adds all our local (stablished) sequences to the database, i.e. not only the ones to query
-    The priority column will have a value from 0 (sequence can be safely excluded) to 255 (sequence must remain);
-    therefore local sequences must start with at least 127
-    The class column is to distinguish NORW_SEQ and NORW_MISSING (if sequence is present or not). It may also be
-    NORW_QUERY, COGUK and GISAID
-    New metadata has `date_sequenced` and `Postcode` that are useful
     """
-    ## local csv may contain info on rejected samples (e.g. as 2020.05.12 there are 
-    ## 452 rows but only 302 sequences, since 150 were not sequenced yet or QC rejected)
-    metadata = metadata0.copy() ## to make sure we don't modify global metadata 
+    # csv will have same n_samples but columns from metadata; index is seqname if avail or central_sample_id o.w.
+    metadata, csv = common.merge_global_and_local_metadata (metadata0, csv0)
 
+    # just in case (we should not use original csv0) : csv0 has imputed values from previous iteration
     remove_cols = [c for c in common.remove_from_master_cols if c in csv0.columns]  ## imputed values from previous iteration
     if len(remove_cols):
         csv0.drop (labels = remove_cols, axis=1, inplace = True) 
-    csv = csv0.copy()
-
-    matched = metadata[ metadata["central_sample_id"].isin(csv.index) ] # index of csv is "central_sample_id"
-    csv["submission_org_code"] = "NORW"
-    csv["submission_org"] = "Norwich"
     
     leaf_names = [x for x in tree_leaves.keys()] # some will be updated below to COGUK format, some are already in COGUK format
     seqs_not_in_tree = dict()  ## NORW sequences that should be in tree but are not
     # change leaf names whenever possible (i.e. they match to 'official' COGUK long names)
-    for shortname, longname  in zip(matched["central_sample_id"], matched["sequence_name"]):
+    for shortname, longname  in zip(csv["central_sample_id"], csv["sequence_name"]):
         if shortname in leaf_names: # leaf_names is a list; if x in y means x==z for some z in y (!= 'A' in 'ZAPPA')
             tree_leaves[str(shortname)].name = longname # leaf names NORW-E9999 --> England/NORW-E9999/2020
         else:
             if longname not in leaf_names: 
                 seqs_not_in_tree[str(shortname)] = longname
     tree_leaves = {(leaf.name):leaf for leaf in tree.iter_leaves()} # dict {leaf_str_name: ete3_node}
-    leaf_names = set (leaf_names + [x for x in tree_leaves.keys()]) # update with new leaf names (from COGUK)
-#    norwseqnames = [x.id for x in seq_matrix]
     if len(seqs_not_in_tree):
         tbl_debug = [f"[DEBUG]\t{x}\t{y}" for x,y in seqs_not_in_tree.items()]
         logger.warning("%s\tsamples in local (csv) metadata were not found on tree (excluded from analysis due to low quality?)", len(tbl_debug))
         logger.debug("And the sequences are\n%s", "\n".join(tbl_debug))
-
-    ## temporarily use central_sample_id as index, so that we can merge_by_index
-    matched.reset_index(inplace=True) ## downgrades current index to a regular column
-    matched.set_index ("central_sample_id", append=False, drop = True, inplace = True) # append creates a new col w/ index 
-    #matched.dropna  (axis=1, how='all', inplace=True) ## delete empty columns with NA only 
-
-    ## merge csv with corresponding elements from global metadata (note that these are just intersection with csv)
-    csv = common.df_merge_metadata_by_index (csv, matched) 
     
-    # replace receive leaf names in case it's NORW-E996C 
-    csv["peroba_seq_uid"] = csv["peroba_seq_uid"].fillna(csv.index.to_series())
-    csv["sequence_name"] = csv["sequence_name"].fillna(csv.index.to_series())
-    #csv[metadata.index.names[0]] = csv[metadata.index.names[0]].fillna(csv.index.to_series()) # same as above
-
-    ## revert index to same as global metadata ("peroba_seq_uid" usually)
-    csv.reset_index (drop=False, inplace=True) ## drop=True means drop index completely, not even becomes a column
-    csv.set_index (metadata.index.names, drop = True, inplace = True) # drop to avoid an extra 'peroba_seq_uid' column
-    # merge with COGUK 
-    csv = common.df_merge_metadata_by_index (csv, metadata) 
-
-    #csv['days_since_Dec19'] = csv['collection_date'].map(lambda a: get_days_since_2019(a, impute = False))
-    csv['days_since_Dec19'] = csv['collection_date'].map(lambda a: (a - datetime.datetime(2019,12, 1)).days) 
-
-    # remove all rows not present in tree
-    csv = csv[ csv.index.isin(leaf_names) ]
     # check if we have information about all leaves (o.w. we must prune the tree)
-    len_csv = len(csv)
-    len_tre = len(tree_leaves)
-    logger.info("Number tree leaves mapped to the metadata: %s", len_csv)
-    if len_csv < len_tre:
-        logger.warning("Number of leaves (%s) is higher than matched metadata (%s)",len_tre, len_csv)
-        id_meta = set(csv.index.array) # <PandasArray> object, works like an np.array
-        id_leaves = set([x for x in tree_leaves.keys()]) 
-        only_in_tree = list(id_leaves - id_meta)
+    id_meta = set(metadata.index.array) # <PandasArray> object, works like an np.array
+    id_leaves = set([x for x in tree_leaves.keys()]) 
+    only_in_tree = list(id_leaves - id_meta)
+    if len(only_in_tree) > 0:
         logger.warning("Removing %s unmapped leaves from dictionary", str(len(only_in_tree)))
         logger.debug("List of unmapped leaves:\n%s", "\t".join(only_in_tree))
         for i in only_in_tree:
@@ -184,16 +142,22 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
         logger.warning("  some examples (whenever counter>1): %s", str(collections.Counter(leaf_list).most_common(20)))
 
     logger.info("Merging metadata files by sequence name, after renaming local sequences when possible")
-    metadata0 = common.df_merge_metadata_by_index (csv, metadata0) 
-    metadata0["collection_date"] = pd.to_datetime(metadata0["collection_date"], infer_datetime_format=True, yearfirst=True, errors='coerce')
-    return metadata0, csv, tree, tree_leaves
+    return metadata, csv, tree, tree_leaves
 
 def merge_original_with_extra_cols (csv_original, metadata):
-    cols = [x for x in metadata.columns if x.startswith("peroba")] 
+    cols =  [x for x in metadata.columns if x.startswith("peroba")]  
     cols += ["central_sample_id"]
+#    cols += [x for x in metadata.columns if x in common.asr_cols] # both imputed (above) and original  
     df =  metadata[cols]
     df = df.merge(csv_original, on="central_sample_id")
     return df  ## no csv_original were harmed in this function
+
+def remove_imputation_from_gisaid (metadata):
+    uk_cols = [[x,"peroba_" + x] for x in metadata.columns if x in common.uk_specific_cols]
+    for c1, c2 in uk_cols:
+        # if not from COGUK and not estimated by COGUK pipeline (to allow for uk seqs in GISAID)
+        metadata.loc[ metadata["submission_org_code"].isnull() & metadata[c1].isnull() , c2] = np.nan
+    return metadata
 
 def markdown_headers (input_dir, output_dir, title_date, figdir):
     # tex_formatted_string() protects from YAML substitution 
@@ -273,18 +237,18 @@ def main_prepare_report_files (metadata0, csv0, tree, tree_leaves, input_dir, ou
     fw_htm.write(html_desc)
     fw_pdf.write(pdf_desc)
 
-    ## prepare data (merging, renaming) csv0 WILL BE MODIFIED to remove columns from prev week
+    ## prepare data (merging, renaming) csv0 will be modified to remove columns from prev week
     metadata, csv, tree, tree_leaves = merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves)
-    ## start plotting 
-    html_desc, pdf_desc, csv = plot_over_clusters (csv, tree, min_cluster_size = 10, output_dir=output_dir, 
+    ## start plotting (metadata will receive peroba_ imputed values) 
+    html_desc, pdf_desc, metadata = plot_over_clusters (metadata, tree, min_cluster_size = 10, output_dir=output_dir, 
             figdir=figdir, pdf_report_name = pdfreportname)
     fw_htm.write(html_desc)
     fw_pdf.write(pdf_desc)
 
-    metadata = phylo.save_metadata_inferred (metadata, tree)
-    csv = merge_original_with_extra_cols (csv0, metadata)
-    csv.to_csv (csv_file_name)
+    metadata = remove_imputation_from_gisaid (metadata) # uk_lineages from Australia samples...
     metadata.to_csv (meta_file_name)
+    csv = merge_original_with_extra_cols (csv, metadata)
+    csv.to_csv (csv_file_name)
 
     html_desc, pdf_desc = stdraw.plot_jitter_lineages (metadata, output_dir, figdir)
     fw_htm.write(html_desc)

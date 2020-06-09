@@ -40,7 +40,9 @@ qi_logo_file = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/r
 
 # For nabil, these must be on our output csv: peroba_uk_lineage    peroba_lineage    peroba_phylotype    peroba_special_lineage  central_sample_id
 # therefore these go to master sheet and come back without "peroba_" on following week
-asr_cols = ["uk_lineage", "lineage", "phylotype"]  
+asr_cols = ["uk_lineage", "lineage", "phylotype", "primary_uk_lineage"]  
+# values imputed by peroba but that make no sense unless the sample is from the UK (with the "peroba_") 
+uk_specific_cols = ["uk_lineage", "phylotype", "primary_uk_lineage"]  
 # therefore we exclude the following columns from local (a.k.a. master table), since these must be from global metadata if present
 remove_from_master_cols = ["uk_lineage", "lineage", "phylotype", "special_lineage", "acc_lineage", "del_lineage",
         "primary_uk_lineage"] # new on 2020.06.08

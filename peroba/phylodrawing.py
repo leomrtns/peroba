@@ -254,7 +254,7 @@ def ASR_subtrees (metadata0, tree, reroot = True, method = None):
     if isinstance (method, str): method = [method, method]
 
     metadata = metadata0.copy()  # work with copies
-    metadata["uk_lineage"] = metadata["uk_lineage"].replace("x", np.nan, regex=True)  ## old database (before 05.22) made this silly substitution
+    #metadata["uk_lineage"] = metadata["uk_lineage"].replace("x", np.nan, regex=True)  ## old database (before 05.22) made this silly substitution
     csv_cols = [x for x in common.asr_cols if x in metadata.columns]
     if reroot: ## this should be A,B 
         R = tree.get_midpoint_outgroup()
@@ -277,13 +277,14 @@ The **locality** allows us to focus on the local scale, by "zooming in" into con
     logger.info("Finished estimating ancestral state for 'locality', which defines clusters")
     
     ## decorate the tree with ancestral states
-    csv, csv_cols = prepare_csv_columns_for_asr (metadata, csv_cols)
+    csv, csv_cols = prepare_csv_columns_for_asr (metadata, csv_cols) # csv is used only in pastml (imputation go to tree)
     if (csv_cols):
         logger.info("Will now estimate ancestral states for %s", " ".join(csv_cols))
         tree_leaf_nodes = {leaf:leaf.name for leaf in tree.iter_leaves()} # in case we have duplicated names 
         result = acr (tree, csv, prediction_method = method[1], force_joint=False) ## annotates tree nodes with states (e.g. tre2.adm2)
         for leafnode, leafname  in tree_leaf_nodes.items(): # pastml (correctly) replaces duplicated names by a placeholder like "t123" 
             leafnode.name = leafname  # reverts back to duplicate names 
+    # adds new peroba_ columns with imputed and original values:
     metadata = save_metadata_inferred (metadata, tree, csv_cols)
 
     node2leaves = tree.get_cached_content(store_attr="name") # dict node:[leaves]
@@ -297,8 +298,7 @@ def prepare_csv_columns_for_asr (csv, csv_cols=None):
     if csv_cols is None:  csv_cols = common.asr_cols # csv_cols = estimate tips, add "peroba_" to name and export
     csv_cols = [x for x in csv_cols if x in csv.columns]
     csv = csv[csv_cols + ["submission_org_code"]]; ## dataframe csv will also have submission_org_code column (for tree colouring)
-    if "ICU_admission" in csv_cols:
-        csv["ICU_admission"] = csv["ICU_admission"].replace("Unknown", "", regex=True)
+    #csv["ICU_admission"] = csv["ICU_admission"].replace("Unknown", "", regex=True)
 
     csv.loc[~csv["submission_org_code"].str.contains("NORW", na=False), "date_sequenced"] = "nil" # only for NORW
 
@@ -336,12 +336,12 @@ def save_metadata_inferred (df, tree, csv_cols = None):
     if csv_cols is None: csv_cols = common.asr_cols
     prefix = "peroba_"
     for col in csv_cols:
-        df[prefix+col] = "" # create new columns 
+        df[prefix+col] = df[col] # same information as original 
 
     for leaf in tree.iter_leaves():
         for col in csv_cols:
             x = getattr(leaf,col)
-            df.loc[str(leaf.name), prefix+col] = "/".join([str(i) for i in x])
+            df.loc[str(leaf.name), prefix+col] = "/".join([str(i) for j,i in enumerate(x) if j < 4])
 #            if pd.isnull(df.loc[str(leaf.name), col]): ## just impute if it was nan
 #                df.loc[str(leaf.name), col] = "/".join([str(i) for i in x]) # this is original column
     return df
