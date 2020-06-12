@@ -62,7 +62,7 @@ class PerobaBackbone:
     cols = ["sequence_name", "central_sample_id", "submission_org_code", "submission_org", "collection_datetime", 
             "adm0", "adm1", "adm2", "acc_lineage", "del_lineage",  
             "country" , "cov_id", "sequencing_org", "sequencing_org_code", "sequencing_submission_date",
-            "lineage", "lineage_support", "special_lineage","uk_lineage", "phylotype",
+            "lineage", "lineage_support", "special_lineage", "uk_lineage", "phylotype",
             "peroba_freq_acgt", "peroba_freq_n", "peroba_seq_uid", "source_age", "source_sex", ## until here  from global, below is local
             "adm2_private", "Repeat Sample ID", "icu_admission", "PCR Ct value", "No. Reads", "Mapped Reads", 
             "No. Bases (Mb)", "Coverage (X)", "Average read length", "Basic QC", "High Quality QC", "Missing bases (N)",
@@ -310,8 +310,10 @@ class PerobaBackbone:
                     ["del_lineage",1, 50],
                     ["adm1",       5, 500],
                     ["uk_lineage", 2, 20], 
-                    ["uk_lineage",20, 500], 
-                    ["phylotype",  2, 20]
+                    ["uk_lineage",20, 200], 
+                    ["phylotype",  2, 20],
+                    ["acc_lineage", 2, 10],
+                    ["del_lineage", 2, 10]
                     ] 
         df = self.g_csv
         logger.info("Subsampling redundant global samples (i.e. those fom same lineage etc.)") 
@@ -325,9 +327,9 @@ class PerobaBackbone:
                 df1 = df.groupby(column).filter(lambda x: len(x.index) > rule1).groupby(column).head(rule2)
                 if dfcat is None: dfcat = df1
                 else: dfcat = pd.concat([dfcat, df1])
-        for column in ["lineage", "uk_lineage"]:
+        for column in ["lineage", "uk_lineage", "acc_lineage", "del_lineage"]:
             if column in df.columns:
-                df1 = df[ df[column] == "" ].head(100) 
+                df1 = df[ df[column] == "" ].head(100)  # undefined (missing) lineages 
                 if dfcat is None: dfcat = df1
                 else: dfcat = pd.concat([dfcat, df1])
 
@@ -335,7 +337,7 @@ class PerobaBackbone:
         logger.info("After subsampling, global metadata has %s samples", self.g_csv.shape[0])
         self.g_seq, self.g_snp, self.trees = self.remove_seq_tree_based_on_metadata()
 
-    def remove_low_quality (self, g_acgt = 0.8, l_acgt = 0.6, g_n = 0.1, l_n = 0.2):
+    def remove_low_quality (self, g_acgt = 0.75, l_acgt = 0.5, g_n = 0.1, l_n = 0.3):
         logger.info(f"Remove global sequences with proportion of ACGT less than  {g_acgt} or proportion of N higher than {g_n}")
         self.g_csv = self.g_csv.loc[ (self.g_csv["peroba_freq_acgt"] > g_acgt) & (self.g_csv["peroba_freq_n"] < g_n) ]
         self.g_seq, self.g_snp, self.trees = self.remove_seq_tree_based_on_metadata()
@@ -345,11 +347,11 @@ class PerobaBackbone:
         self.l_seq, self.l_snp, self.trees = self.remove_seq_tree_based_on_metadata(local=True)
         logger.info("After removal, global data has %s samples and local data has %s.", self.g_csv.shape[0], self.l_csv.shape[0])
 
-    def find_neighbours (self, blocks = 1500, leaf_size = 500, dist_blocks = 3, nn = 50):
+    def find_neighbours (self, blocks = 2000, leaf_size = 500, dist_blocks = 4, nn = 25):
         logger.info(f"Finding neighbours to local sequences, using a distance of {dist_blocks} to {blocks} segments")
         neighbours1 = ml.list_r_neighbours (self.g_snp, self.l_snp, blocks, leaf_size, dist_blocks)
        
-        blocks = 3 * blocks; leaf_size = leaf_size/2
+        blocks = 2 * blocks; leaf_size = leaf_size/2
         logger.info("Found %s neighbours; now will find their %s closest neighbours on %s segments", 
                 len(neighbours1), str(nn), str(blocks))
         aln_d = {x:self.g_snp[x] for x in neighbours1}

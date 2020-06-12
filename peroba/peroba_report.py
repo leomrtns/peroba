@@ -28,6 +28,16 @@ template_dir = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/r
 def tex_formattted_string (string): # YAML header is translated into latex by pandoc; we have to tell it's already translated
     return "\"`" + string + "`{=latex}\""  # returns  "`/usr/file_name.txt`{=latex}"
 
+def md_html_table (df):
+    cols = ["central_sample_id", "biosample_source_id", "adm2", "adm2_private", "lineage", # sequence_name is same as index
+            "peroba_lineage", "peroba_uk_lineage", "peroba_phylotype", "acc_lineage", "del_lineage", 
+            "submission_org_code", "source_age", "source_sex", "ICU_admission", 
+            "collection_date", "sequencing_submission_date", "peroba_freq_acgt", "peroba_freq_n"]
+    cols = [c for c in cols if c in df.columns]
+    dfc = df[cols]
+    return "\n\n" + dfc.to_markdown(tablefmt="pipe") + "\n\n"
+
+
 def plot_over_clusters (metadata, tree, min_cluster_size = None, output_dir=None, figdir=None, pdf_report_name = None):
     if output_dir is None: output_dir = cwd
     if min_cluster_size is None: min_cluster_size = 5
@@ -35,7 +45,11 @@ def plot_over_clusters (metadata, tree, min_cluster_size = None, output_dir=None
 
     md_description = """
 ## Phylogenetic clusters\n
-Only clusters with more than {minc_size} elements are shown.
+Only clusters with more than {minc_size} elements are shown.\n\n
+In the tables below, lineage columns starting with `peroba_` include classification inferred by us, while those without
+it only have values defined upstream by COGUK. \n
+These columns include `lineage`, `uk_lineage`, and `phylotpe`. Sometimes our method cannot infer the lineage without
+error and will include several possible ones, separated by a bar ('`\`').\n\n
 """.format (minc_size = min_cluster_size)
     html_desc = pdf_desc = md_description 
 
@@ -51,9 +65,12 @@ Only clusters with more than {minc_size} elements are shown.
     logger.info("Entering loop over clusters found; sit tight!")
     for i,(c,t) in enumerate(zip(sub_df,sub_tree)):
         if len(c) > min_cluster_size:
+            c = remove_imputation_from_gisaid (c) # remove imputations where it doens't make sense (uk_lineage from China)
             md_description = f"\n### Cluster {i}\n"
             html_desc += md_description
             pdf_desc  += md_description
+            html_desc += md_html_table (c)
+
             hdesc, pdesc = phylo.plot_single_cluster (c, t, i, ts, output_dir, figdir)
             html_desc += hdesc; pdf_desc += pdesc
 
@@ -105,26 +122,33 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
         csv0.drop (labels = remove_cols, axis=1, inplace = True) 
     
     leaf_names = [x for x in tree_leaves.keys()] # some will be updated below to COGUK format, some are already in COGUK format
-    seqs_not_in_tree = dict()  ## NORW sequences that should be in tree but are not
+    seqs_not_in_tree = dict()  # NORW sequences that should be in tree but are not
+    norw_seqs_in_tree = dict() # variable used only for debug printing
     # change leaf names whenever possible (i.e. they match to 'official' COGUK long names)
     for shortname, longname  in zip(csv["central_sample_id"], csv["sequence_name"]):
         if shortname in leaf_names: # leaf_names is a list; if x in y means x==z for some z in y (!= 'A' in 'ZAPPA')
             tree_leaves[str(shortname)].name = longname # leaf names NORW-E9999 --> England/NORW-E9999/2020
+            norw_seqs_in_tree[str(shortname)] = longname 
         else:
             if longname not in leaf_names: 
                 seqs_not_in_tree[str(shortname)] = longname
+            else:
+                norw_seqs_in_tree[str(shortname)] = longname
+
     tree_leaves = {(leaf.name):leaf for leaf in tree.iter_leaves()} # dict {leaf_str_name: ete3_node}
     if len(seqs_not_in_tree):
         tbl_debug = [f"[DEBUG]\t{x}\t{y}" for x,y in seqs_not_in_tree.items()]
-        logger.warning("%s\tsamples in local (csv) metadata were not found on tree (excluded from analysis due to low quality?)", len(tbl_debug))
+        logger.warning("%s\tsamples in local csv metadata were not found on tree (excluded from analysis due to low quality?)", len(tbl_debug))
         logger.debug("And the sequences are\n%s", "\n".join(tbl_debug))
+    logger.info ("%s\tsamples from local csv metadata were found on tree and will form the basis of the analysis", len(norw_seqs_in_tree))
+    logger.debug("And the sequences are\n%s", "\n".join(norw_seqs_in_tree.keys()))
     
     # check if we have information about all leaves (o.w. we must prune the tree)
     id_meta = set(metadata.index.array) # <PandasArray> object, works like an np.array
     id_leaves = set([x for x in tree_leaves.keys()]) 
     only_in_tree = list(id_leaves - id_meta)
     if len(only_in_tree) > 0:
-        logger.warning("Removing %s unmapped leaves from dictionary", str(len(only_in_tree)))
+        logger.warning("Removing %s unmapped leaves from tree dictionary", str(len(only_in_tree)))
         logger.debug("List of unmapped leaves:\n%s", "\t".join(only_in_tree))
         for i in only_in_tree:
             del tree_leaves[i]
@@ -240,7 +264,7 @@ def main_prepare_report_files (metadata0, csv0, tree, tree_leaves, input_dir, ou
     ## prepare data (merging, renaming) csv0 will be modified to remove columns from prev week
     metadata, csv, tree, tree_leaves = merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves)
     ## start plotting (metadata will receive peroba_ imputed values) 
-    html_desc, pdf_desc, metadata = plot_over_clusters (metadata, tree, min_cluster_size = 10, output_dir=output_dir, 
+    html_desc, pdf_desc, metadata = plot_over_clusters (metadata, tree, min_cluster_size = 5, output_dir=output_dir, 
             figdir=figdir, pdf_report_name = pdfreportname)
     fw_htm.write(html_desc)
     fw_pdf.write(pdf_desc)

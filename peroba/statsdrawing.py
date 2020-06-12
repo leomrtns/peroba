@@ -198,8 +198,11 @@ def plot_genomes_sequenced_over_time (metadata, output_dir, figdir):
     plt.setp(leg.get_texts(), fontweight='light', fontsize=12)
     plt.setp(leg.get_title(),  fontweight='normal', fontsize=12)
     x = g.get_xticklabels()
-    for lab in x:
-        lab.set_text(lab.get_text()[:10])
+    for i,lab in enumerate(x):
+        if i%2:
+            lab.set_text("")
+        else:
+            lab.set_text(lab.get_text()[:10])
     x = g.set_xticklabels (x, rotation=30, horizontalalignment='right', fontweight='light')
     
     desc = """
@@ -278,7 +281,8 @@ def plot_jitter_lineages (metadata, output_dir, figdir):
     ax.set_title (f"Lineages over time for all genomes sequenced at QIB", fontsize=16)
     [t.set_color(my_cmap(i/len(y_label))) for (i,t) in enumerate(ax.yaxis.get_ticklabels())]
     fig.tight_layout()
-    caption= "Genomes sequenced at the QIB by lineage over time"
+    caption= "Genomes sequenced at the QIB by lineage over time (sequences not included in phylogenetic pipeline\
+are considered 'unclassified')"
     desc = "\n\n## Lineages over time\n\n"
 
     fname = f"{figdir}/jitter_lineages.pdf"
@@ -306,9 +310,9 @@ def plot_jitter_uk_lineages (metadata, output_dir, figdir):
     y_label = [x for x in sl_df["peroba_uk_lineage"]] 
 
     ## add Normal() jitter
-    x = ((df["dtime"] - df["dtime"].min())/np.timedelta64(1, 'D')).astype(float) + np.random.normal(0,0.25, len(df["dtime"]))
+    x = ((df["dtime"] - df["dtime"].min())/np.timedelta64(1, 'D')).astype(float) + np.random.normal(0,0.2, len(df["dtime"]))
     yfix = [lineage_idx[i] for i in df["peroba_uk_lineage"]]
-    y = yfix + np.random.normal(0,0.1, len(df["peroba_uk_lineage"]))
+    y = yfix + np.random.normal(0,0.08, len(df["peroba_uk_lineage"]))
     ## create x labels
     x_range = pd.date_range(df["dtime"].min(), df["dtime"].max(), freq="1D") # creates uniform interval
     label_interval = int (len(x_range)/14)
@@ -320,14 +324,14 @@ def plot_jitter_uk_lineages (metadata, output_dir, figdir):
     iteriter = [(i/npoints,cm.get_cmap("tab20b")(x)) for i,x in enumerate(iteriter)]
     my_cmap = colors.LinearSegmentedColormap.from_list("custom", iteriter)
 
-    fig, ax = plt.subplots(nrows=1, ncols=1,figsize=(12, 12)) # I'm leaving ax in case we want several plots
-    ax.scatter (x,y, alpha=0.2, edgecolors=(0,0,0,0.4), cmap=my_cmap, c=yfix, s=30) 
+    fig, ax = plt.subplots(nrows=1, ncols=1,figsize=(12, 14)) # I'm leaving ax in case we want several plots
+    ax.scatter (x,y, alpha=0.25, edgecolors=(0,0,0,0.2), cmap=my_cmap, c=yfix, s=25) 
 
     ax.set_xticks(np.arange(0, len(x_label), 1));
     ax.set_yticks(np.arange(0, len(y_label), 1));
     ax.set_xticklabels(x_label)
     ax.set_yticklabels(y_label)
-    ax.set_ylim(len(y_label)-80,len(y_label))
+    ax.set_ylim(len(y_label)-75,len(y_label))
     ax.grid(axis="y", color="w", linestyle='-', linewidth=0.5)
     ax.tick_params(axis='x', which='major', labelsize=14)
     ax.tick_params(axis='y', which='major', labelsize=11)
@@ -336,7 +340,8 @@ def plot_jitter_uk_lineages (metadata, output_dir, figdir):
     ax.set_title (f"UK lineages over time for all genomes sequenced at QIB", fontsize=16)
     [t.set_color(my_cmap(i/len(y_label))) for (i,t) in enumerate(ax.yaxis.get_ticklabels())]
     fig.tight_layout()
-    caption= "Genomes sequenced at the QIB by UK lineage over time"
+    caption= "Genomes sequenced at the QIB by UK_lineage over time (sequences not included in phylogenetic pipeline\
+are considered 'unclassified')"
 
     fname = f"{figdir}/jitter_uk_lineages.pdf"
     fig.savefig(os.path.join(output_dir,fname), format="pdf", dpi=(100))  # or plt.savefig()
@@ -385,10 +390,10 @@ def plot_postcode_map (metadata, counter, output_dir, figdir):
     casecounts.rename(columns={"adm2_private":"area"},inplace=True)
 
     ## prepare geographical lines (land/sea etc.)
-    fig, ax = plt.subplots(nrows=1, ncols=1,figsize=(6,7)) # I'm leaving ax in case we want several plots
+    fig, ax = plt.subplots(nrows=1, ncols=1,figsize=(6,8)) # I'm leaving ax in case we want several plots
     fig.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=None)
     m = Basemap(resolution='h', projection='merc', lat_0=54.5, lon_0=-4.36, ax=ax,
-             llcrnrlon=-0.92, llcrnrlat= 51.8, urcrnrlon=1.8, urcrnrlat=53.1)
+             llcrnrlon=-0.92, llcrnrlat= 51.5, urcrnrlon=1.8, urcrnrlat=53.4)
     #m.drawmapboundary(fill_color='aliceblue') ## fillcolor is ocean; 'lake' below are... lakes!
     #m.fillcontinents(color='#ffffff',lake_color='aliceblue')
     #m.drawcoastlines()

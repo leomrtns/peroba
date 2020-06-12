@@ -360,7 +360,7 @@ body dl,
 body table,
 body pre {
   margin-top: 0;
-  margin-bottom: 16px;
+  margin-bottom: 6px;
 }
 
 body hr {
@@ -422,9 +422,16 @@ body blockquote>:last-child {
 body table {
   display: block;
   width: 100%;
+  font-size: 75%;
   overflow: auto;
   word-break: normal;
   word-break: keep-all;
+  margin-left: auto;
+  margin-right: auto;
+  margin-bottom: 1px;
+  border-spacing: 0;
+/*  border-bottom: 1px solid black; */
+/*  border-top: 1px solid black; */
 }
 
 body table th {
@@ -433,7 +440,7 @@ body table th {
 
 body table th,
 body table td {
-  padding: 6px 13px;
+  padding: 2px 5px;
   border: 1px solid #ddd;
 }
 

@@ -341,7 +341,7 @@ def save_metadata_inferred (df, tree, csv_cols = None):
     for leaf in tree.iter_leaves():
         for col in csv_cols:
             x = getattr(leaf,col)
-            df.loc[str(leaf.name), prefix+col] = "/".join([str(i) for j,i in enumerate(x) if j < 4])
+            df.loc[str(leaf.name), prefix+col] = "/".join([str(i) for j,i in enumerate(x) if j < 3])
 #            if pd.isnull(df.loc[str(leaf.name), col]): ## just impute if it was nan
 #                df.loc[str(leaf.name), col] = "/".join([str(i) for i in x]) # this is original column
     return df
