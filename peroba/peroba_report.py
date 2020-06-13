@@ -30,13 +30,12 @@ def tex_formattted_string (string): # YAML header is translated into latex by pa
 
 def md_html_table (df):
     cols = ["central_sample_id", "biosample_source_id", "adm2", "adm2_private", "lineage", # sequence_name is same as index
-            "peroba_lineage", "peroba_uk_lineage", "peroba_phylotype", "acc_lineage", "del_lineage", 
+            "peroba_lineage","uk_lineage", "peroba_uk_lineage", "peroba_phylotype", "acc_lineage", "del_lineage", 
             "submission_org_code", "source_age", "source_sex", "ICU_admission", 
             "collection_date", "sequencing_submission_date", "peroba_freq_acgt", "peroba_freq_n"]
     cols = [c for c in cols if c in df.columns]
     dfc = df[cols]
     return "\n\n" + dfc.to_markdown(tablefmt="pipe") + "\n\n"
-
 
 def plot_over_clusters (metadata, tree, min_cluster_size = None, output_dir=None, figdir=None, pdf_report_name = None):
     if output_dir is None: output_dir = cwd
