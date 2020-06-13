@@ -47,9 +47,12 @@ def plot_over_clusters (metadata, tree, min_cluster_size = None, output_dir=None
 ## Phylogenetic clusters\n
 Only clusters with more than {minc_size} elements are shown.\n\n
 In the tables below, lineage columns starting with `peroba_` include classification inferred by us, while those without
-it only have values defined upstream by COGUK. \n
+it only have values defined upstream by COGUK.
 These columns include `lineage`, `uk_lineage`, and `phylotpe`. Sometimes our method cannot infer the lineage without
-error and will include several possible ones, separated by a bar ('`\`').\n\n
+error and will include several possible ones, separated by a bar ('`/`').
+Some samples are left unclassified by COGUK due to uncertainty (not enough evidence for including it in a `uk_lineage`,
+for instance) but our method will impute a lineage/phylotype to it nonetheless.
+\n\n
 """.format (minc_size = min_cluster_size)
     html_desc = pdf_desc = md_description 
 

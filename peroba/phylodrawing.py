@@ -150,7 +150,8 @@ def columnwise_color_scheme (df0):
     #df["source_age"] = df["source_age"].str.split('.').str[0] # this is before I fixed columns as_numeric
     # color bar width, label column, column title, coded labels, n1 n2 for color table
     clist = [[50, "Area", "adm2", "area_code", 0, 2]] 
-    clist.append([40, "Lineages", "peroba_lineage", "peroba_lineage", 3, 3]) ## you can use same column again
+    clist.append([40, "Lineages", "peroba_lineage", "peroba_lineage", 3, 3])
+    clist.append([40, "UK Lineage", "peroba_uk_lineage", "peroba_uk_lineage", 15, 6])
     clist.append([40, "Hospital", "collecting_org", "collecting_org", 6, 2])
     clist.append([15, "ICU", "is_icu_patient", "is_icu_patient", 8, 2])
     #clist.append([15, "Age", "source_age",    "age_range",    11, 2])
@@ -265,7 +266,9 @@ Sequence clusters are based on **locality**: patients from Norfolk (field `adm2`
 (submission org = `NORW`).
 This definition is not equivalent to the `UK lineages`, which relies on sequence properties and is estimated at the
 national level. 
-The **locality** allows us to focus on the local scale, by "zooming in" into connected lineages.
+Our method does not take the `UK lineages` explicitly into account and as result we may find clusters spanning several
+lineages, and we may also see samples from the same lineage scattered across clusters (reflecting their locality).
+The **locality** allows us to focus on the local scale, by "zooming in" into geographycally connected lineages.
 <br>
     """
     logger.info("Start estimating ancestral states by %s for locality and %s for others", method[0], method[1])

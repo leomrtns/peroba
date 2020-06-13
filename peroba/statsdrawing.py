@@ -388,6 +388,7 @@ def plot_postcode_map (metadata, counter, output_dir, figdir):
     casecounts.fillna(0, inplace=True)
     casecounts.reset_index(drop=False, inplace=True)
     casecounts.rename(columns={"adm2_private":"area"},inplace=True)
+    logger.debug("cluster %s: nrows = %s, valid postcodes=%s",counter, df.shape, sum(casecounts["cnt"]))
 
     ## prepare geographical lines (land/sea etc.)
     fig, ax = plt.subplots(nrows=1, ncols=1,figsize=(6,8)) # I'm leaving ax in case we want several plots
@@ -406,7 +407,9 @@ def plot_postcode_map (metadata, counter, output_dir, figdir):
         })
     poly = poly.merge(casecounts, on="area", how="left")
 
-    cmap = plt.get_cmap('Oranges')   
+    colscale = [(0,(1,1,1))] + [((x+0.01)/1.01,cm.get_cmap("magma_r")(x)) for x in np.linspace(0, 1, 16)]
+    cmap = colors.LinearSegmentedColormap.from_list("custom", colscale)
+    # cmap = plt.get_cmap('Oranges')   
     pc = PatchCollection(poly.shapes, zorder=2)
     norm = colors.Normalize()
 
@@ -417,7 +420,7 @@ def plot_postcode_map (metadata, counter, output_dir, figdir):
     ax.set_title(f"Cluster {counter}")
     mapper = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
     mapper.set_array(poly["cnt"])
-    plt.colorbar(mapper, shrink=0.5, ax=ax, orientation="horizontal", pad= 0.04)
+    plt.colorbar(mapper, shrink=0.9, ax=ax, orientation="horizontal", pad= 0.02)
     plt.gcf().set_rasterized(True)
     fig.tight_layout()
     caption = f"Number of samples per region (postal code) for cluster {counter}, for those samples with this information"
