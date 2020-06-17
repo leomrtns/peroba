@@ -141,6 +141,7 @@ class PerobaBackbone:
         self.g_csv.loc[sqn, "peroba_freq_acgt"] = np.nan # recalculate
         self.g_csv.loc[sqn, "peroba_freq_n"] = np.nan
         self.g_csv, sequence = common.add_sequence_counts_to_metadata (self.g_csv, sequence, from_scratch=False) # seqname must be in index
+        ## FIXME :: very low quality sequences break mafft (>90% Ns for example)
 
         # merge sequences (align local first, since global are already aligned)
         ref_seq = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/MN908947.3.fas")  
@@ -468,7 +469,7 @@ def read_peroba_database (f_prefix):
     if f_prefix[-1] == ".": f_prefix = f_prefix[:-1] ## both `perobaDB.0621` and `perobaDB.0621.` are valid
     fname = f_prefix + common.suffix["metadata"]
     logger.info(f"Reading database metadata from \'{fname}\'")
-    metadata = pd.read_csv (fname, compression="infer", index_col="peroba_seq_uid") 
+    metadata = pd.read_csv (fname, compression="infer", index_col="peroba_seq_uid", dtype="unicode") 
     metadata = common.df_finalise_metadata (metadata) 
 
     fname = f_prefix + common.suffix["tree"]

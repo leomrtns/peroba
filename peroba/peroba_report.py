@@ -171,9 +171,10 @@ def merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves):
     return metadata, csv, tree, tree_leaves
 
 def merge_original_with_extra_cols (csv_original, metadata):
-    cols =  [x for x in metadata.columns if x.startswith("peroba")]  
+    #cols =  [x for x in metadata.columns if x.startswith("peroba")] # peroba_freq_ will be twice 
+    peroba_cols = ["peroba_" + c for c in common.asr_cols]
+    cols =  [x for x in metadata.columns if x in peroba_cols]
     cols += ["central_sample_id"]
-#    cols += [x for x in metadata.columns if x in common.asr_cols] # both imputed (above) and original  
     df =  metadata[cols]
     df = df.merge(csv_original, on="central_sample_id")
     return df  ## no csv_original were harmed in this function

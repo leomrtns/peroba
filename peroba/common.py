@@ -35,17 +35,14 @@ suffix = {
 
 qi_logo_file = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/report/QIlogo.png") 
  
-#asr_cols = ["adm2", "uk_lineage", "lineage", "phylotype", "submission_org_code", "date_sequenced", "source_age", "source_sex", "collecting_org", "ICU_admission"]
-
-
 # For nabil, these must be on our output csv: peroba_uk_lineage    peroba_lineage    peroba_phylotype    peroba_special_lineage  central_sample_id
 # therefore these go to master sheet and come back without "peroba_" on following week
 asr_cols = ["uk_lineage", "lineage", "phylotype", "primary_uk_lineage"]  
 # values imputed by peroba but that make no sense unless the sample is from the UK (with the "peroba_") 
 uk_specific_cols = ["uk_lineage", "phylotype", "primary_uk_lineage"]  
 # therefore we exclude the following columns from local (a.k.a. master table), since these must be from global metadata if present
-remove_from_master_cols = ["uk_lineage", "lineage", "phylotype", "special_lineage", "acc_lineage", "del_lineage",
-        "primary_uk_lineage"] # new on 2020.06.08
+remove_from_master_cols = ["uk_lineage", "lineage", "phylotype", "special_lineage", "acc_lineage", "del_lineage", "primary_uk_lineage"] 
+# primary_uk_lineage is new on 2020.06.08
 
 dtype_numeric_cols = [
         'gaps', 'length', 'edin_epi_week', 'epi_week', 'layout_insert_length', 'layout_read_length', 'missing', 
