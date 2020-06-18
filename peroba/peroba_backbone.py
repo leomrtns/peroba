@@ -555,7 +555,7 @@ def main():
         if not os.path.exists(fname):
             fname = os.path.join(input_d, args.csv)
         if not os.path.exists(fname):
-            logger.warning ("Could not find local CSV file {args.csv}; Will proceed without it")
+            logger.warning (f"Could not find local CSV file {args.csv}; Will proceed without it")
         else:
             logger.info("Reading CSV file with metadata from NORW")
             csv = common.df_read_genome_metadata (fname, index_name = "central_sample_id")
@@ -567,7 +567,7 @@ def main():
         if not os.path.exists(fname):
             fname = os.path.join(input_d, args.sequences)
         if not os.path.exists(fname):
-            logger.warning ("Could not find sequence file {args.sequences}; Will proceed without it")
+            logger.warning (f"Could not find sequence file {args.sequences}; Will proceed without it")
         else:
             logger.info("Reading fasta file with sequences from NORW")
             sequences = common.read_fasta (fname, check_name = False)
@@ -578,7 +578,7 @@ def main():
         if not os.path.exists(fname):
             fname = os.path.join(input_d, args.trees)
         if not os.path.exists(fname):
-            logger.warning ("Could not find tree file {args.trees}; Will proceed without it")
+            logger.warning (f"Could not find tree file {args.trees}; Will proceed without it")
         else:
             logger.info("Reading file with current trees and checking for duplicate names")
             treestring = [x.rstrip().replace("\'","").replace("\"","").replace("[&R]","") for x in open(fname)]
