@@ -97,7 +97,6 @@ class PerobaBackbone:
                     seqs_in_global.append (seq.id) 
                 else: ## will be added through a new_rows dataframe
                     s_new.append (seq.id)
-                    print ("DEBUG:: ", seq.id)
                     #self.g_csv.loc[str(seq.id)] = pd.Series({'sequence_name':seq.id, 'central_sample_id':seq.id,'submission_org_code':"NORW", 'submission_org':"Norwich"})
             else: # sequence has long, official name
                 if "NORW" in seq.id: ## we only consider replacing local seqs, otherwise database migth have newer  
