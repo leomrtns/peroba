@@ -228,7 +228,7 @@ def fill_file_location (filelist, directory):
     if isinstance (filelist, str):
         filelist = [filelist]
     fullname = []
-    for f in filelist:
+    for f in filelist: ## FIXME: priority is directory not working_dir
         fname = os.path.join(current_working_dir, f)
         if not os.path.exists(fname):
             fname = os.path.join(directory, f)

@@ -1,22 +1,17 @@
 #!/usr/bin/env python
 
 import logging, ete3, argparse
-import numpy as np, pandas as pd
+import numpy as np
 from Bio import Seq, SeqIO, Align, AlignIO, Phylo, Alphabet, pairwise2
-#from Bio.SeqRecord import SeqRecord
-import datetime, time, codecs, sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib
+#import datetime, time, codecs, sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib
+import time, codecs, random
 from sklearn.neighbors import NearestNeighbors, BallTree ## KDTree does NOT accept hamming
 from sklearn.cluster import OPTICS
-#from fuzzywuzzy import fuzz ## fuzz.ratio(x, "E959D")
 import xxhash
-
-from Bio import Seq, SeqIO, Align, AlignIO, Phylo, Alphabet, pairwise2
-from Bio.SeqRecord import SeqRecord
-from Bio.Align import AlignInfo, Applications
-from Bio.Blast import NCBIXML
-from Bio.Phylo import draw, TreeConstruction  #TreeConstruction.DistanceCalculator, TreeConstruction.DistanceTreeConstructor
-import ete3 
-# https://bioinformatics.stackexchange.com/questions/4337/biopython-phylogenetic-tree-replace-branch-tip-labels-by-sequence-logos
+from utils import *
+#from Bio.SeqRecord import SeqRecord
+#from Bio.Align import AlignInfo, Applications
+#from fuzzywuzzy import fuzz ## fuzz.ratio(x, "E959D")
 
 logger = logging.getLogger(__name__) 
 logger.propagate = False
@@ -25,7 +20,6 @@ log_format = logging.Formatter(fmt='peroba %(asctime)s [%(levelname)s] %(message
 stream_log.setFormatter(log_format)
 stream_log.setLevel(logging.INFO)
 logger.addHandler(stream_log)
-
 
 def list_duplicates (seq_dict, blocks = 4, leaf_size = 500, radius=0.00001):
     aln = [x for x in seq_dict.values()]
@@ -76,3 +70,18 @@ def list_n_neighbours (g_seq, l_seq, blocks = 1000, leaf_size = 200, nn = 10):
     clusters = list(set([g_aln[j].id for x in idx for j in x])) # one-dimentional list of all global neighbours
     return clusters
 
+def list_paf_neighbours (g_seq, l_seq, n_segments = 1, n_threads = 4): # nthreads >4 cause problem (killed)
+    if n_segments > 10: n_segments = 10
+    if n_segments < 1:  n_segments = 1
+    g_aln = [x for x in g_seq.values()]
+    l_aln = [x for x in l_seq.values()]
+    genome_size = len(g_aln[0].seq) ## only works for aligned sequences
+    block_size = int(genome_size / n_segments)
+    #(str(g_aln[j].seq[i:i+block_size])) 
+    #for j in range(len(g_aln))]
+    clusters = []
+    for i in range(0, genome_size, block_size):
+        loc  = [SeqRecord(Seq.Seq(str(rec.seq[i:i+block_size])),id=rec.id,description=rec.description) for rec in l_aln]
+        glob = [SeqRecord(Seq.Seq(str(rec.seq[i:i+block_size])),id=rec.id,description=rec.description) for rec in g_aln]
+        clusters += minimap2_find_neighbours (query_aln = loc, target_aln = glob, batch_size = 64, n_best=10, n_threads = n_threads) # returns list of  seqnames
+    return list(set(clusters))

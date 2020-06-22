@@ -10,7 +10,7 @@ import regression as ml
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False
 stream_log = logging.StreamHandler()
-log_format = logging.Formatter(fmt='peroba_backbone %(asctime)s [%(levelname)s] %(message)s', datefmt="%Y-%m-%d %H:%M")
+log_format = logging.Formatter(fmt='peroba_backbone %(asctime)s [%(levelname)s] %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
 stream_log.setFormatter(log_format)
 stream_log.setLevel(logging.DEBUG)
 logger.addHandler(stream_log)
@@ -347,11 +347,23 @@ class PerobaBackbone:
         self.l_seq, self.l_snp, self.trees = self.remove_seq_tree_based_on_metadata(local=True)
         logger.info("After removal, global data has %s samples and local data has %s.", self.g_csv.shape[0], self.l_csv.shape[0])
 
-    def find_neighbours (self, blocks = 2000, leaf_size = 500, dist_blocks = 4, nn = 25):
+    def find_neighbours_ball (self, blocks = 2000, leaf_size = 500, dist_blocks = 4, nn = 25):
         logger.info(f"Finding neighbours to local sequences, using a distance of {dist_blocks} to {blocks} segments")
         neighbours1 = ml.list_r_neighbours (self.g_snp, self.l_snp, blocks, leaf_size, dist_blocks)
        
         blocks = 2 * blocks; leaf_size = leaf_size/2
+        logger.info("Found %s neighbours; now will find their %s closest neighbours on %s segments", 
+                len(neighbours1), str(nn), str(blocks))
+        aln_d = {x:self.g_snp[x] for x in neighbours1}
+        neighbours = ml.list_n_neighbours (self.g_snp, aln_d, blocks, leaf_size, nn)
+        neighbours = list(set(neighbours + neighbours1))
+        logger.info("Found %s neighbours", len(neighbours))
+        return neighbours
+
+    def find_neighbours_paf (self, blocks = 2500, leaf_size = 500, n_segments = 1, nn = 25):
+        logger.info(f"Finding neighbours to local sequences, by alignment mapping of {n_segments} segment(s)")
+        neighbours1 = ml.list_paf_neighbours (self.g_snp, self.l_snp, n_segments = n_segments, n_threads = 4)
+       
         logger.info("Found %s neighbours; now will find their %s closest neighbours on %s segments", 
                 len(neighbours1), str(nn), str(blocks))
         aln_d = {x:self.g_snp[x] for x in neighbours1}
@@ -483,9 +495,52 @@ def read_peroba_database (f_prefix):
     logger.info("Finished loading the database; dataframe has dimensions %s and it's assumed we have the same number of sequences; the tree may be smaller", metadata.shape)
     return [metadata, sequences, tree]
 
+def sequences_quality_control (sequences, min_length = 20000, max_freq_N = 0.5):
+    pass_seqs = []
+    pass_qual = []
+    fail_names = [] 
+    ## remove very low quality, and store quality values (some may be duplicates)
+    for x in sequences:
+        seq = str(x.seq)
+        n1 = common.calc_freq_N_from_string (seq)
+        l = len(seq)
+        if n1 < max_freq_N and l > min_length:
+            pass_seqs.append(x)
+            pass_qual.append((1. - n1) * l) # number of non-N bases
+        else:
+            fail_names.append([x.id, "{:.2f}".format(n1*100), l])
+    if len(fail_names) > 0:
+        logger.warning ("From local sequences, %s passed and %s failed quality control", len(pass_seqs), len(fail_names))
+        fail_detail = [f"Sequence {x[0]} has {x[1]}% of Ns and length {x[2]}" for x in fail_names]
+        logger.debug("Sequences that failed basic quality control:\n%s","\n".join(fail_detail))
+    else:
+        logger.info ("Quality control of local sequences: all %s passed", len(pass_seqs))
+
+    uniq_seqs = {}
+    uniq_qual = {}
+    duplicates = []
+    for s,q in zip (pass_seqs, pass_qual):
+        if s.id in uniq_seqs.keys(): # sequence is a duplicate
+            duplicates.append(s.id)
+            if uniq_qual[s.id] < q:
+                uniq_qual[s.id] = q
+                uniq_seqs[s.id] = s
+        else:
+            uniq_qual[s.id] = q
+            uniq_seqs[s.id] = s
+    duplicates = list(set(duplicates))
+    if len(duplicates) > 0:
+        logger.warning ("From local sequences, %s appear with same name more than once (it's fine BTW).", len(duplicates))
+        logger.debug("List of duplicated names:\n","\t".join(duplicates))
+    else:
+        logger.info ("After checking, all local sequences have a unique name")
+
+    return [x for x in uniq_seqs.values()]
+
 def main_generate_backbone_dataset (database, csv, sequences, trees, replace, prefix):
     # initialisation
     bb = PerobaBackbone (database)
+    sequences = sequences_quality_control (sequences) # very bad sequences break MAFFT
     bb.add_local_data_and_sequences (csv, sequences, replace)
     bb.finalise_and_split_data_sequences()
     bb.add_trees (trees)
@@ -494,7 +549,7 @@ def main_generate_backbone_dataset (database, csv, sequences, trees, replace, pr
     bb.remove_low_quality()
     bb.reduce_redundancy() ## add step to remove too distant 
     # more methods come here
-    neighbours = bb.find_neighbours()
+    neighbours = bb.find_neighbours_paf()
     # for each method we can use chosen neighbours to save global only or both
     description  = save_global_from_seqnames (bb, neighbours, prefix + "coguk")
     description += save_user_trees (bb, neighbours, prefix + "user", add_nj_tree = True)
@@ -529,7 +584,7 @@ def main():
     parser.add_argument('-v', '--verbose', action="store_const", dest="loglevel", const=logging.INFO, help="Add verbosity")
     parser.add_argument('-i', '--input', action="store", help="Directory where perobaDB files are. Default: working directory")
     parser.add_argument('-c', '--csv', metavar='csv', help="csv table with metadata from NORW")
-    parser.add_argument('-s', '--sequences', metavar='fasta.bz2', help="extra sequences from NORW")
+    parser.add_argument('-s', '--sequences', metavar='fasta', nargs='+', help="extra files with local sequences (from NORW)")
     parser.add_argument('-t', '--trees', metavar='', help="file with (user-defined) trees in newick format to help produce backbone")
     parser.add_argument('-o', '--output', action="store", help="Output database directory. Default: working directory")
     parser.add_argument('-r', '--replace', default=False, action='store_true', help="replace database sequence with local version")
@@ -563,14 +618,21 @@ def main():
 
     sequences = None
     if (args.sequences):
-        fname = os.path.join(current_working_dir, args.sequences)
-        if not os.path.exists(fname):
-            fname = os.path.join(input_d, args.sequences)
-        if not os.path.exists(fname):
-            logger.warning (f"Could not find sequence file {args.sequences}; Will proceed without it")
+        logger.info("Reading fasta files with sequences from NORW")
+        if isinstance (args.sequences, str):
+            seqfiles = [args.sequences]
         else:
-            logger.info("Reading fasta file with sequences from NORW")
-            sequences = common.read_fasta (fname, check_name = False)
+            seqfiles = args.sequences
+        sequences = []
+        for f in seqfiles:
+            fname = os.path.join(input_d, f)
+            if not os.path.exists(fname):
+                fname = os.path.join(current_working_dir, f)
+            if not os.path.exists(fname):
+                logger.warning (f"Could not find sequence file {f}; Will proceed without it")
+            else:
+                s = common.read_fasta (fname, check_name = False)
+                sequences += s
 
     trees = None
     if (args.trees):

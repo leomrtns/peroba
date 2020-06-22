@@ -261,6 +261,20 @@ def df_finalise_metadata (df, exclude_na_rows = False, exclude_columns = False, 
         df = df.T.drop_duplicates().T # transpose, remove duplicate rows, and transpose again
     return df
 
+def calc_freq_N_from_string (genome):
+    l = len(genome)
+    if (l):
+        number_Ns = sum([genome.upper().count(nuc) for nuc in ["N", "-"]])
+        return number_Ns / l
+    else: return 1.
+
+def calc_freq_ACGT_from_string (genome):
+    l = len(genome)
+    if (l):
+        number_ACGTs = sum([genome.upper().count(nuc) for nuc in ["A", "C", "G", "T"]])
+        return number_ACGTs / l
+    else: return 0.
+
 def add_sequence_counts_to_metadata (metadata, sequences, from_scratch = None):
     if from_scratch is None: from_scratch = True
     """ counts the proportions of indel/uncertain bases (i.e `N` and `-`) as well as number of ACGT.
@@ -270,19 +284,11 @@ def add_sequence_counts_to_metadata (metadata, sequences, from_scratch = None):
     def calc_freq_N (index):
         if index not in sequences: return 1.
         if sequences[index] is None: return 1. ## missing sequences
-        genome = str(sequences[index].seq); l = len(genome)
-        if (l):
-            number_Ns = sum([genome.upper().count(nuc) for nuc in ["N", "-"]])
-            return number_Ns / l
-        else: return 1.
+        return calc_freq_N_from_string (str(sequences[index].seq)) 
     def calc_freq_ACGT (index):
         if index not in sequences: return 0.
         if sequences[index] is None: return 0. ## missing sequences
-        genome = str(sequences[index].seq); l = len(genome)
-        if (l):
-            number_ACGTs = sum([genome.upper().count(nuc) for nuc in ["A", "C", "G", "T"]])
-            return number_ACGTs / len(genome)
-        else: return 0.
+        return calc_freq_ACGT_from_string (str(sequences[index].seq)) 
 
     if from_scratch or "peroba_freq_n" not in metadata.columns: # map() sends the index to lambda function
         metadata["peroba_freq_n"] = metadata.index.map(lambda x: calc_freq_N (x))  

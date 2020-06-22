@@ -3,7 +3,16 @@ from Bio import Seq, SeqIO, Align, AlignIO, Alphabet
 from Bio.SeqRecord import SeqRecord
 from Bio.Align import AlignInfo
 import numpy as np
-import datetime, sys, gzip, lzma, bz2, re, subprocess, os, itertools, ete3, collections
+import datetime, sys, gzip, lzma, bz2, re, subprocess, os, itertools, ete3, collections, logging
+
+logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
+logger.propagate = False
+stream_log = logging.StreamHandler()
+log_format = logging.Formatter(fmt='peroba %(asctime)s [%(levelname)s] %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
+stream_log.setFormatter(log_format)
+stream_log.setLevel(logging.INFO)
+logger.addHandler(stream_log)
+
 
 #from Bio.Phylo import draw, TreeConstruction  #TreeConstruction.DistanceCalculator, TreeConstruction.DistanceTreeConstructor
 #from Bio import Phylo, pairwise2
@@ -98,6 +107,45 @@ def mafft_align_seqs (sequences=None, infile = None, outfile = None, reference_f
         if outfile is not None:
             SeqIO.write(aligned, ofl, "fasta")
     return aligned
+
+def minimap2_find_neighbours (query_aln = None, target_aln = None, prefix = "/tmp/", batch_size = 64, n_best = 10, n_threads = 4):
+    query_fl = f"{prefix}/query.fasta"
+    target_fl = f"{prefix}/target.fasta"
+    ofl = f"{prefix}/best.paf"
+    if n_best < 2: n_best = 2 # number of _secondary_ alignments is n_best -1
+    if batch_size < 2:   batch_size = 2
+    if batch_size > 500: batch_size = 500
+
+    # create index since minimap2 is memory-hungry (gets killed)
+    SeqIO.write(target_aln, target_fl, "fasta") 
+    runstr = ["minimap2","-x","asm5","-t", str(n_threads),"-d",  f"{target_fl}.mmi", target_fl] # create index first, o.w. is killed
+    proc_run = subprocess.check_output(runstr, universal_newlines=True)
+
+    paf = list()
+    l = len(query_aln)
+    runstr = ["minimap2","-t", str(n_threads),"--paf-no-hit", f"{target_fl}.mmi", query_fl, "-N", str(n_best-1), "-o", ofl]
+    for batch in range (0, len(query_aln), batch_size):
+        last = batch + batch_size
+        if last > l: last = l
+        SeqIO.write(query_aln[batch:last],  query_fl,  "fasta") 
+        proc_run = subprocess.check_output(runstr, universal_newlines=True)
+        thispaf = [x.rstrip().split() for x in open(ofl).readlines()]
+        # description of columns here: https://lh3.github.io/minimap2/minimap2.html
+        # query seq; target (db) seq; proportion matches over aligned area; prop matches over target genome
+        paf.append([[x[0],x[5],float(x[9])/float(x[10]), float(x[9])/float(x[6])] for x in thispaf])
+        logger.info("Searched neighbours for {:.3f}% of local sequences".format(last * 100/l))
+    nn = dict()
+    score = dict()
+    for p in paf:
+        if p[0] in nn.keys(): ## TypeError: unhashable type: 'list'
+            if (score[p[0]] - p[3]) < 1e-5: # usually zero or negative, assuming sorted results
+                nn[p[0]] += [p[1]]
+        else:
+            nn[p[0]] = [p[1]]
+            score[p[0]] = p[3]
+    nn_unique = set([y for i in nn.values() for y in i])
+    os.system(f"rm -f {query_fl} {target_fl} {target_fl}.mmi {ofl}")
+    return nn_unique 
 
 def lowlevel_parse_cigar (s):
     out = list(); ind = len(s)-1
