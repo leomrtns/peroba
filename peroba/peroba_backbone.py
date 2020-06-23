@@ -303,8 +303,9 @@ class PerobaBackbone:
         df = df.sort_values(by=self.sort_cols, ascending=self.sort_ascend)
 
         ## TODO: do not reduce csv, but create list of accepted seqnames; replace peroba_tmp by peroba_group
-        #for c in [x for x in replace_duplicate_cols if x in df.cols]:
-        #    df[c] = df.groupby(["peroba_tmp"])[c].agg(pd.Series.mode) # most common value amongst identical sequences
+        #for c in [x for x in replace_duplicate_cols if x in df.cols]: # most common value amongst identical sequences
+        #    df[c] = df.groupby(["peroba_tmp"])[c].transform(pd.Series.mode) # transform() keeps index
+
 
         df = df.groupby("peroba_tmp").aggregate("first") # only one sequence from each cluster, following self.order_col preference
         df.set_index ("peroba_seq_uid", drop = True, inplace = True)
