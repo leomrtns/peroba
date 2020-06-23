@@ -134,6 +134,7 @@ def minimap2_find_neighbours (query_aln = None, target_aln = None, prefix = "/tm
         # query seq; target (db) seq; proportion matches over aligned area; prop matches over target genome
         paf.append([[x[0],x[5],float(x[9])/float(x[10]), float(x[9])/float(x[6])] for x in thispaf])
         logger.info("Searched neighbours for {:.3f}% of local sequences".format(last * 100/l))
+        print ("DEBUG:: ", paf)
     nn = dict()
     score = dict()
     for p in paf:

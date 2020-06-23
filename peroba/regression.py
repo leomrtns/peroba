@@ -46,7 +46,7 @@ def list_r_neighbours (g_seq, l_seq, blocks = 1000, leaf_size = 500, dist_blocks
     g_hash = [[xxhash.xxh32(str(g_aln[j].seq[i:i+block_size])).intdigest() for i in range(0,genome_size,block_size)] for j in range(len(g_aln))]
     btre = BallTree(np.array(g_hash), leaf_size=leaf_size, metric='hamming') # create a neighbours tree of global sequences
 
-    logger.info("And finding neighbours with distance smaller than %s",str(radius))
+    logger.info("And finding neighbours with distance smaller than {:.6f}".format(radius))
     l_hash = [[xxhash.xxh32(str(l_aln[j].seq[i:i+block_size])).intdigest() for i in range(0,genome_size,block_size)] for j in range(len(l_aln))]
     idx = btre.query_radius(l_hash, r=radius, return_distance=False) # gives global neighbours to each local sequence; return_distance is expensive
     clusters = list(set([g_aln[j].id for x in idx for j in x])) # one-dimentional list of all global neighbours
@@ -70,10 +70,10 @@ def list_n_neighbours (g_seq, l_seq, blocks = 1000, leaf_size = 200, nn = 10):
     clusters = list(set([g_aln[j].id for x in idx for j in x])) # one-dimentional list of all global neighbours
     return clusters
 
-def list_paf_neighbours (g_seq, l_seq, n_segments = 1, n_threads = 4): # nthreads >4 cause problem (killed)
+def list_paf_neighbours (g_seq, l_seq, n_segments = 1, n_best = 10, n_threads = 4): # nthreads >4 cause problem (killed)
     if n_segments > 10: n_segments = 10
     if n_segments < 1:  n_segments = 1
-    g_aln = [x for x in g_seq.values()]
+    g_aln = [x for x in g_seq.values()] # calling function is faster if working with dictionary than list (alignment)
     l_aln = [x for x in l_seq.values()]
     genome_size = len(g_aln[0].seq) ## only works for aligned sequences
     block_size = int(genome_size / n_segments)
@@ -83,5 +83,5 @@ def list_paf_neighbours (g_seq, l_seq, n_segments = 1, n_threads = 4): # nthread
     for i in range(0, genome_size, block_size):
         loc  = [SeqRecord(Seq.Seq(str(rec.seq[i:i+block_size])),id=rec.id,description=rec.description) for rec in l_aln]
         glob = [SeqRecord(Seq.Seq(str(rec.seq[i:i+block_size])),id=rec.id,description=rec.description) for rec in g_aln]
-        clusters += minimap2_find_neighbours (query_aln = loc, target_aln = glob, batch_size = 64, n_best=10, n_threads = n_threads) # returns list of  seqnames
+        clusters += minimap2_find_neighbours (query_aln = loc, target_aln = glob, batch_size = 64, n_best=n_best, n_threads = n_threads) # returns list of  seqnames
     return list(set(clusters))
