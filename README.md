@@ -24,7 +24,7 @@ for Phylogenetic Epidemiology with ROBust Assignment.
    `peroba_backbone`), this script will estimate ancestral states and generate a PDF report.
 
 ## Instructions
-You can find [a tutorial on the software here](docs/023.peroba_pipeline.html).
+You can find [a tutorial on the software here](docs/023.peroba_pipeline.ipynb).
 
 ## Caveats
 Not all sequences pass the sequencing quality control. Those that do may be excluded from COGUK phylogenetic analysis,
