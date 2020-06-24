@@ -397,3 +397,46 @@ def list_from_custom_colorset (start=0, n_base_colours=4, list_size = 8):
 def hex2rgb (x, norm = True):
     if norm:
         return tuple(float(int(x[i:i+2], 16))/255. for i in (0, 2, 4))
+
+def remove_duplicated_sequences (sequences): # input is list, returns a dict
+    uniq_seqs = {}
+    uniq_qual = {}
+    duplicates = []
+    for x in sequences:
+        seq = str(x.seq)
+        quality = len(seq) - sum([seq.upper().count(nuc) for nuc in ["N", "-"]])
+        if x.id in uniq_seqs.keys(): # sequence name has been seen before 
+            if uniq_qual[x.id] < quality: # replaces if better quality
+                uniq_qual[x.id] = quality
+                uniq_seqs[x.id] = x
+            duplicates.append(x.id)
+        else: # first time we see this sequence
+            uniq_qual[x.id] = quality
+            uniq_seqs[x.id] = x
+    if len(duplicates)>0:
+        logger.warning ("%s duplicate (i.e. with same name) sequences were resolved by choosing the one with highest quality", len(duplicates))
+        duplicates = list(set(duplicates))
+        logger.debug ("And the sequence names are:\n%s\n", "\n".join(duplicates))
+    else:
+        logger.info ("All sequences have distinct names")
+
+    return uniq_seqs, uniq_qual
+
+def sequence_pair_with_better_quality (s1, s2, q1=None, q2=None, matched=None, description=["global","local"]):
+    if matched is None:
+        matched = list(set(s1.keys()) & set(s2.keys()))
+    if q1 is None:
+        q1 = {x:(len(str(s1[x].seq)) - sum([str(s1[x].seq).upper().count(nuc) for nuc in ["N", "-"]])) for x in matched}
+    if q2 is None:
+        q2 = {x:(len(str(s2[x].seq)) - sum([str(s2[x].seq).upper().count(nuc) for nuc in ["N", "-"]])) for x in matched}
+    better = [[],[]]
+    for x in matched:
+        if q1[x] > q2[x]:
+            better[0].append(x)
+            s2[x].seq = s1[x].seq
+        if q1[x] < q2[x]:
+            better[1].append(x)
+            s1[x].seq = s2[x].seq
+    logger.info("{} matched pairs, with {} better on {} and {} better on {} sequences".format(len(matched), 
+        len(better[0]), description[0], len(better[1]), description[1]))
+    return s1, s2, better

@@ -31,6 +31,7 @@ def list_duplicates (seq_dict, blocks = 4, leaf_size = 500, radius=0.00001):
     idx = btre.query_radius(hashes, r=radius, return_distance=False) ## return_distace=False makes it faster; r=0.0001 is essentially zero
     #clusters = [[aln[j].id for j in x] for x in idx if len(x)>1] # only those with duplicates (len>1) are returned
     clusters = [[aln[j].id for j in x] for x in idx] # return all 
+    del aln, hashes, btre, idx
     return clusters
 
 def list_r_neighbours (g_seq, l_seq, blocks = 1000, leaf_size = 500, dist_blocks = 1):
@@ -50,6 +51,7 @@ def list_r_neighbours (g_seq, l_seq, blocks = 1000, leaf_size = 500, dist_blocks
     l_hash = [[xxhash.xxh32(str(l_aln[j].seq[i:i+block_size])).intdigest() for i in range(0,genome_size,block_size)] for j in range(len(l_aln))]
     idx = btre.query_radius(l_hash, r=radius, return_distance=False) # gives global neighbours to each local sequence; return_distance is expensive
     clusters = list(set([g_aln[j].id for x in idx for j in x])) # one-dimentional list of all global neighbours
+    del g_aln, g_hash, l_aln, l_hash, btre, idx
     return clusters
 
 def list_n_neighbours (g_seq, l_seq, blocks = 1000, leaf_size = 200, nn = 10):
@@ -68,9 +70,10 @@ def list_n_neighbours (g_seq, l_seq, blocks = 1000, leaf_size = 200, nn = 10):
     l_hash = [[xxhash.xxh32(str(l_aln[j].seq[i:i+block_size])).intdigest() for i in range(0,genome_size,block_size)] for j in range(len(l_aln))]
     dist, idx = btre.query (l_hash, k=nn, return_distance=True) # return_distance is free 
     clusters = list(set([g_aln[j].id for x in idx for j in x])) # one-dimentional list of all global neighbours
+    del g_aln, g_hash, l_aln, l_hash, btre, idx
     return clusters
 
-def list_paf_neighbours (g_seq, l_seq, n_segments = 1, n_best = 10, n_threads = 4): # nthreads >4 cause problem (killed)
+def list_paf_neighbours (g_seq, l_seq, n_segments = 1, n_best = 10, n_threads = 2): # nthreads increase peak memory 
     if n_segments > 10: n_segments = 10
     if n_segments < 1:  n_segments = 1
     g_aln = [x for x in g_seq.values()] # calling function is faster if working with dictionary than list (alignment)

@@ -108,7 +108,7 @@ def mafft_align_seqs (sequences=None, infile = None, outfile = None, reference_f
             SeqIO.write(aligned, ofl, "fasta")
     return aligned
 
-def minimap2_find_neighbours (query_aln = None, target_aln = None, prefix = "/tmp/", batch_size = 64, n_best = 10, n_threads = 4):
+def minimap2_find_neighbours (query_aln = None, target_aln = None, prefix = "/tmp/", batch_size = 64, n_best = 10, n_threads = 2):
     query_fl = f"{prefix}/query.fasta"
     target_fl = f"{prefix}/target.fasta"
     ofl = f"{prefix}/best.paf"
@@ -123,21 +123,24 @@ def minimap2_find_neighbours (query_aln = None, target_aln = None, prefix = "/tm
 
     paf = list()
     l = len(query_aln)
-    runstr = ["minimap2","-t", str(n_threads),"--paf-no-hit", f"{target_fl}.mmi", query_fl, "-N", str(n_best-1), "-o", ofl]
+    #runstr = ["minimap2","-t", str(n_threads),"--paf-no-hit", f"{target_fl}.mmi", query_fl, "-N", str(n_best-1), "-o", ofl]
+    runstr = ["minimap2", "--paf-no-hit", f"{target_fl}.mmi", query_fl, "-N", str(n_best-1), "-o", ofl]
     for batch in range (0, len(query_aln), batch_size):
         last = batch + batch_size
         if last > l: last = l
         SeqIO.write(query_aln[batch:last],  query_fl,  "fasta") 
-        proc_run = subprocess.check_output(runstr, universal_newlines=True)
+        #proc_run = subprocess.check_output(runstr, universal_newlines=True)
+        proc_run = subprocess.check_output(runstr)
         thispaf = [x.rstrip().split() for x in open(ofl).readlines()]
         # description of columns here: https://lh3.github.io/minimap2/minimap2.html
         # query seq; target (db) seq; proportion matches over aligned area; prop matches over target genome
-        paf.append([[x[0],x[5],float(x[9])/float(x[10]), float(x[9])/float(x[6])] for x in thispaf])
+        paf += [[x[0],x[5],float(x[9])/float(x[10]), float(x[9])/float(x[6])] for x in thispaf]
         logger.info("Searched neighbours for {:.3f}% of local sequences".format(last * 100/l))
-        print ("DEBUG:: ", paf)
     nn = dict()
     score = dict()
     for p in paf:
+        print ("DEBUG:1: ", p)
+        print ("DEBUG:2: ", nn)
         if p[0] in nn.keys(): ## TypeError: unhashable type: 'list'
             if (score[p[0]] - p[3]) < 1e-5: # usually zero or negative, assuming sorted results
                 nn[p[0]] += [p[1]]
