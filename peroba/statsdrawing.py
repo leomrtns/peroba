@@ -50,11 +50,11 @@ def generate_time_heatmap (df0, date_col = None, group_col = None, use_max = Tru
     recent = {}
     if use_max: # sort by most recent case
         for column in df.columns:
-            res = max (((df.index - df.index.values.min())/np.timedelta64(1, 'D')).astype(int) * (df[column].astype(np.int64())>0))
+            res = max (((df.index - df.index.values.min())/np.timedelta64(1, 'D')).astype(int) * (df[column].astype('int64')>0))
             recent[column] = res
     else: # sort by weighted average of dates (weights are number of cases)
         for column in df.columns:
-            x = ((df.index - df.index.values.min())/np.timedelta64(1, 'D')).astype(int)
+            x = ((df.index - df.index.values.min())/np.timedelta64(1, 'D')).astype('int64')
             res = sum(x * df[column].astype(np.int64()))/sum(df[column].astype(np.int64()))
             recent[column] = res
 
