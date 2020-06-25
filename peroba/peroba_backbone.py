@@ -6,6 +6,7 @@ import numpy as np, pandas as pd
 from utils import *
 import common
 import regression as ml 
+import gc  # garbage collector
 
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False
@@ -45,8 +46,6 @@ favourite_cats = {
 fill_missing_cols = ["lineage", "acc_lineage", "del_lineage", "submission_org_code", 
         "submission_org", "adm0", "adm1", "adm2","uk_lineage","phylotype", "country"]
 
-replace_duplicate_cols = ["lineage", "acc_lineage", "del_lineage", "uk_lineage", "phylotype"]
-
 # cast type as numeric, to allow comparison/sorting
 numeric_cols = ['peroba_freq_acgt', 'peroba_freq_n', "PCR Ct value", "Coverage (X)",'lineage_support']
 
@@ -71,6 +70,9 @@ class PerobaBackbone:
             "adm2_private", "Repeat Sample ID", "icu_admission", "PCR Ct value", "No. Reads", "Mapped Reads", 
             "No. Bases (Mb)", "Coverage (X)", "Average read length", "Basic QC", "High Quality QC", "Missing bases (N)",
             "Consensus SNPs"] 
+    cols = ["sequence_name", "central_sample_id", "submission_org_code", "collection_date", 
+            "adm0", "adm1", "adm2", "acc_lineage", "del_lineage",  "country" , "lineage", 
+            "lineage_support", "uk_lineage", "phylotype", "peroba_freq_acgt", "peroba_freq_n", "peroba_seq_uid"] 
     sort_cols = None 
     sort_ascend = None
 
@@ -111,6 +113,7 @@ class PerobaBackbone:
                     seqs_in_global.append(seq.id)
                 else:
                     seq.id = None
+        gc.collect()
 
         if len(s_new) > 0:
             logger.warning("Sequences not found in global database will be added by hand:\n%s\n", "   ".join(s_new))
@@ -127,7 +130,7 @@ class PerobaBackbone:
         sequence, l_qual = common.remove_duplicated_sequences (sequence) # return a dict of seqs and one of qualities 
         if self.unaligned is not None and len(seqs_in_global) > 0:
             logger.info("Replacing local and global sequences by one with better quality (more non-N bases)")
-            self.unaligned, sequence, to_replace = common.sequence_pair_with_better_quality (self.unaligned, sequence, q2=l_qual, matched=seqs_in_global)
+            self.unaligned, sequence, to_replace = common.sequence_dict_pair_with_better_quality (self.unaligned, sequence, q2=l_qual, matched=seqs_in_global)
             for seqname in to_replace[1]: # list of local seq names with better quality
                 del self.g_seq[seqname] # will align and use local version instead 
             seqs_in_global = [x for x in seqs_in_global if x not in to_replace[1]] # must realign even if present in global
@@ -219,9 +222,16 @@ class PerobaBackbone:
         self.g_csv = self.g_csv[ ~self.g_csv["submission_org_code"].str.contains("NORW", na=False) ]
         self.l_seq = {x:y for x,y in self.g_seq.items() if x in self.l_csv["sequence_name"]}
         self.g_seq = {x:y for x,y in self.g_seq.items() if x in self.g_csv["sequence_name"]}
+        
+        l_snp = [x for x in snp_aln if x.id in self.l_csv["sequence_name"]]
+        idx = sorted_uncertainty_from_alignment (l_snp, max_freq_n = 0.01)
+        logger.info("Compact representation uses %s SNPs (columns from local seqs with fewer Ns)", len(idx))
+        snp_aln = alignment_from_column_index (snp_aln, idx)
         self.l_snp = {x.id:x for x in snp_aln if x.id in self.l_csv["sequence_name"]}
         self.g_snp = {x.id:x for x in snp_aln if x.id in self.g_csv["sequence_name"]}
+
         logger.info ("split data into %s global and %s local sequences", str(self.g_csv.shape[0]), str(self.l_csv.shape[0]))
+        gc.collect() ## collect garbage
 
     def remove_seq_tree_based_on_metadata (self, seqnames = None, local = False): 
         if seqnames is not None and local:
@@ -354,7 +364,7 @@ class PerobaBackbone:
         logger.info("After subsampling, global metadata has %s samples", self.g_csv.shape[0])
         self.g_seq, self.g_snp, self.trees = self.remove_seq_tree_based_on_metadata()
 
-    def remove_low_quality (self, g_acgt = 0.75, l_acgt = 0.5, g_n = 0.1, l_n = 0.3):
+    def remove_low_quality (self, g_acgt = 0.8, l_acgt = 0.5, g_n = 0.05, l_n = 0.3):
         logger.info(f"Remove global sequences with proportion of ACGT less than  {g_acgt} or proportion of N higher than {g_n}")
         self.g_csv = self.g_csv.loc[ (self.g_csv["peroba_freq_acgt"] > g_acgt) & (self.g_csv["peroba_freq_n"] < g_n) ]
         self.g_seq, self.g_snp, self.trees = self.remove_seq_tree_based_on_metadata()
@@ -364,7 +374,7 @@ class PerobaBackbone:
         self.l_seq, self.l_snp, self.trees = self.remove_seq_tree_based_on_metadata(local=True)
         logger.info("After removal, global data has %s samples and local data has %s.", self.g_csv.shape[0], self.l_csv.shape[0])
 
-    def find_neighbours_ball (self, blocks = 2000, leaf_size = 400, dist_blocks = 4, nn = 10, exclude = None):
+    def find_neighbours_ball (self, blocks = 1500, leaf_size = 400, dist_blocks = 3, nn = 5, exclude = None):
         logger.info(f"Finding neighbours to local sequences, using a distance of {dist_blocks} to {blocks} segments")
         # search only amongst sequences with lineage (notice that sort_categories() replaces null by "")
         target = self.g_csv.loc[(self.g_csv["lineage"] != ""), "sequence_name"].tolist()
@@ -384,7 +394,7 @@ class PerobaBackbone:
         logger.info("Found %s neighbours through hashed nearest-neighbours", len(neighbours))
         return neighbours
 
-    def find_neighbours_paf (self, blocks = 2500, leaf_size = 500, n_segments = 1, nn = 20, exclude = None):
+    def find_neighbours_paf (self, blocks = 2000, leaf_size = 500, n_segments = 1, nn = 10, exclude = None):
         logger.info(f"Finding neighbours to unclassified local sequences, by alignment mapping of {n_segments} segment(s)")
         query = self.l_csv.loc[(self.l_csv["uk_lineage"] == ""), "sequence_name"].tolist()
         if len(query) < 1: 
@@ -412,7 +422,7 @@ class PerobaBackbone:
 
 def save_global_from_seqnames (bb, seqnames, prefix):
     seqs, snps, trees = bb.remove_seq_tree_based_on_metadata (seqnames)
-    desc = save_sequences (seqs, prefix)
+    desc = common.save_sequence_dict_to_file (seqs, prefix + ".aln.xz")
     fname = prefix + ".trees.nhx" 
     with open(fname,"w") as fw:
         for t in trees:
@@ -445,7 +455,7 @@ def save_user_trees (bb, seqnames, prefix, add_nj_tree = False):
     ## add sequences from current analysis (all local plus global neighbours)
     aln.update({x:y for x,y in bb.g_seq.items() if x in seqnames})
     aln.update({x:y for x,y in bb.l_seq.items()})
-    desc = save_sequences (aln, prefix)
+    desc =  common.save_sequence_dict_to_file (aln, prefix + ".aln.xz")
     desc  = "{}\n alignment with sequences from all user-defined trees (that I have access to), as well as all \n".format(colour_string(desc))
     desc += " global and local sequences.\n"
 
@@ -475,7 +485,7 @@ def save_all_sequences (bb, seqnames, prefix, add_nj_tree = True):
     ## add sequences from current analysis (all local plus global neighbours)
     aln = {x:y for x,y in bb.g_seq.items() if x in seqnames}
     aln.update({x:y for x,y in bb.l_seq.items()})
-    desc = save_sequences (aln, prefix)
+    desc =  common.save_sequence_dict_to_file (aln, prefix + ".aln.xz")
     desc = "{}\n alignment with (all) local and (selected) global sequences. This is main output of program\n".format(colour_string(desc))
     logger.info ("Total of %s sequences will form the local+global data set", str(len(aln)))
 
@@ -493,25 +503,6 @@ def save_all_sequences (bb, seqnames, prefix, add_nj_tree = True):
     else:
         desc += " (NJ estimation was not requested)\n"
     return desc + "\n"
-
-def save_sequences (seqs, prefix):
-    fname = prefix + ".aln.xz" 
-    logger.info(f"Saving sequences to file {fname}")
-    mode = "wb"
-    if   "bz2" in fname[-5:]: this_open = bz2.open
-    elif "gz"  in fname[-5:]: this_open = gzip.open
-    elif "xz"  in fname[-5:]: this_open = lzma.open
-    else:  
-        this_open = open
-        mode = "w"
-    with this_open(fname,mode) as fw: 
-        for name, rec in seqs.items():
-            if rec:  ## missing/query sequences
-                seq = str(rec.seq)
-                fw.write(str(f">{name}\n{seq}\n").encode())
-                rec.id = name ## make sure alignment will have same names
-    logger.info(f"Finished saving alignment")
-    return os.path.basename(fname)
 
 def read_peroba_database (f_prefix, trust_global_sequences = False): 
     if f_prefix[-1] == ".": f_prefix = f_prefix[:-1] ## both `perobaDB.0621` and `perobaDB.0621.` are valid
@@ -597,7 +588,7 @@ def main_generate_backbone_dataset (database, csv, sequences, trees, prefix):
     description += save_user_trees (bb, neighbours, prefix + "user", add_nj_tree = True)
     description += save_all_sequences (bb, neighbours, prefix + "norw-coguk", add_nj_tree = True)
     # finally, save all NORW sequences
-    desc = save_sequences (bb.l_seq, prefix + "norw")
+    desc =  common.save_sequence_dict_to_file (bb.l_seq, prefix + "norw.aln.xz")
     description += "{}\n alignment with all local sequences only\n".format(colour_string(desc))
 
     print ("Finished. The output files are described below, where 'global' means COGUK and GISAID data which were ")

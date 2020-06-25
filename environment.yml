@@ -18,15 +18,11 @@ dependencies:
   - parasail-python 
   - scikit-bio 
   - scikit-learn 
-  - dendropy
   - goalign
   - gotree
   - ete3
-  - joypy
-- pip:
-  - .  # this means run pip on this directory's setup.py 
-  - pandas==1.0.1
-  - pytools==2020.1
-  - dendropy>=4.4.0
-  - pastml
-dependencies:
+  - pip:
+    - .  # this means run pip on this directory's setup.py 
+    - pandas==1.0.1
+    - pytools==2020.1
+    - pastml

@@ -13,7 +13,6 @@ import warnings
 import logging, ete3, argparse
 import numpy as np, pandas as pd, seaborn as sns
 from sklearn import manifold, metrics, cluster, neighbors, decomposition, preprocessing
-#import skbio, parasail, dendropy, datetime, time, codecs, joypy
 import sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib, datetime
 
 

@@ -13,15 +13,6 @@ stream_log.setFormatter(log_format)
 stream_log.setLevel(logging.INFO)
 logger.addHandler(stream_log)
 
-
-#from Bio.Phylo import draw, TreeConstruction  #TreeConstruction.DistanceCalculator, TreeConstruction.DistanceTreeConstructor
-#from Bio import Phylo, pairwise2
-#from Bio.Align import Applications
-#from Bio.Blast import NCBIXML
-#import seaborn as sns, pandas as pd
-#from sklearn import manifold, metrics, cluster, neighbors, decomposition, preprocessing
-#import skbio, parasail, dendropy, time, codecs, joypy, pathlib, random, errno, collections, pickle, glob
-
 def colour_string (fname, colour="yellow"):
     ccodes = {"black":30, "red":31, "green":32, "yellow":33, "blue":34, "purple":35, "cyan":36, "white":37}
     if colour in ccodes.keys():
@@ -310,7 +301,7 @@ iupac_dna = {''.join(sorted(v)):k for k,v in Seq.IUPAC.IUPACData.ambiguous_dna_v
 
 def consensus_from_alignment (align): ## IUPAC ambiguity codes
     xaln = [SeqRecord(Seq.Seq(str(rec.seq).replace("-","N") ,Alphabet.IUPAC.ambiguous_dna), id=rec.id, description=rec.description) for rec in align]
-    summary_align = AlignInfo.SummaryInfo(Align.MultipleSeqAlignment(align)) # must be an MSA, not a list
+    summary_align = AlignInfo.SummaryInfo(Align.MultipleSeqAlignment(xaln)) # must be an MSA, not a list
     pssm = summary_align.pos_specific_score_matrix(chars_to_ignore=["-"])
     consensus = [];
     # pssm example: {'-':3, 'A':0, 'T':4.0, 'G':0, 'C':2.0, 'N':1} per column, means 3 seqs have "-", 4 have "T"...
@@ -320,6 +311,21 @@ def consensus_from_alignment (align): ## IUPAC ambiguity codes
         consensus.append(iupac_dna[ ''.join(sorted(set(acgt_list))) ])
     return Seq.Seq(''.join(consensus),Alphabet.IUPAC.ambiguous_dna)
 # profile could be [[x]*count for base,count...] with collection; or dict{A:0, C:0, ...} with dict[base]+=count
+
+def sorted_uncertainty_from_alignment (align, max_freq_n = 0.1): ## IUPAC ambiguity codes
+    if max_freq_n < 0: max_freq_n = 0 # this means only columns without N at all will be used
+    max_n = int(max_freq_n * len(align))
+    if max_n >= len(align): max_n = len(align) - 1 
+
+    summary_align = AlignInfo.SummaryInfo(Align.MultipleSeqAlignment(align)) # must be an MSA, not a list
+    pssm = summary_align.pos_specific_score_matrix()
+    # pssm example: {'-':3, 'A':0, 'T':4.0, 'G':0, 'C':2.0, 'N':1} per column, means 3 seqs have "-", 4 have "T"...
+    index = [[i,s["N"] + s["-"]] for i, s in enumerate(pssm)]
+    return [x[0] for x in index if x[1] < max_n]
+
+def alignment_from_column_index (align, index):
+    seqs = ["".join([x.seq[i] for i in index]) for x in align]
+    return [SeqRecord(Seq.Seq(s), id=r.id, description=r.description) for s,r in zip(seqs,align)]
 
 def distance_from_consensus (query, consensus):
     x = str(query.seq).replace("-","N")

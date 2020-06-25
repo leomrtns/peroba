@@ -10,7 +10,7 @@ from matplotlib import rcParams, cm, colors, patches
 import logging, ete3
 import numpy as np, pandas as pd
 from Bio import Seq, SeqIO
-import datetime, sys, lzma, gzip, bz2, re, glob, collections, subprocess, os, itertools, pathlib, base64
+import random, datetime, sys, lzma, gzip, bz2, re, glob, collections, subprocess, os, itertools, pathlib, base64
 import pandas_profiling # ProfileReport
 from utils import * 
 
@@ -422,7 +422,7 @@ def remove_duplicated_sequences (sequences): # input is list, returns a dict
 
     return uniq_seqs, uniq_qual
 
-def sequence_pair_with_better_quality (s1, s2, q1=None, q2=None, matched=None, description=["global","local"]):
+def sequence_dict_pair_with_better_quality (s1, s2, q1=None, q2=None, matched=None, description=["global","local"]):
     if matched is None:
         matched = list(set(s1.keys()) & set(s2.keys()))
     if q1 is None:
@@ -430,13 +430,41 @@ def sequence_pair_with_better_quality (s1, s2, q1=None, q2=None, matched=None, d
     if q2 is None:
         q2 = {x:(len(str(s2[x].seq)) - sum([str(s2[x].seq).upper().count(nuc) for nuc in ["N", "-"]])) for x in matched}
     better = [[],[]]
+    debug_seq = {} ## DEBUG
     for x in matched:
-        if q1[x] > q2[x]:
+        if q1[x] > q2[x]: ## global is better
             better[0].append(x)
+            debug_seq[f"{x}_G_pass"] = s1[x]
+            debug_seq[f"{x}_L_fail"] = s2[x]
             s2[x].seq = s1[x].seq
-        if q1[x] < q2[x]:
+        if q1[x] < q2[x]: ## local is better
             better[1].append(x)
+            debug_seq[f"{x}_G_fail"] = s1[x]
+            debug_seq[f"{x}_L_pass"] = s2[x]
             s1[x].seq = s2[x].seq
     logger.info("{} matched pairs, with {} better on {} and {} better on {} sequences".format(len(matched), 
         len(better[0]), description[0], len(better[1]), description[1]))
+    fname = save_sequence_dict_to_file (debug_seq)
+    logger.info(f"DEBUG::Quality-based comparison saved to file {fname}")
     return s1, s2, better
+
+def save_sequence_dict_to_file (seqs, fname=None, use_seq_id = False):
+    if fname is None: fname = "tmp." + '%012x' % random.randrange(16**12) + ".aln.xz"
+    logger.info(f"Saving sequences to file {fname}")
+    mode = "wb"
+    if   "bz2" in fname[-5:]: this_open = bz2.open
+    elif "gz"  in fname[-5:]: this_open = gzip.open
+    elif "xz"  in fname[-5:]: this_open = lzma.open
+    else:  
+        this_open = open
+        mode = "w"
+    with this_open(fname,mode) as fw: 
+        for name, rec in seqs.items():
+            if use_seq_id is True: # default is to use dict key
+                name = rec.id
+            if rec:  ## missing/query sequences
+                seq = str(rec.seq)
+                fw.write(str(f">{name}\n{seq}\n").encode())
+                rec.id = name ## make sure alignment will have same names
+    logger.info(f"Finished saving sequences")
+    return os.path.basename(fname)
