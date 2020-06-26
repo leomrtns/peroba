@@ -6,15 +6,12 @@ from matplotlib import rcParams, cm, colors, patches
 from mpl_toolkits.basemap import Basemap  # patches.Polygon, colors.Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.collections import PatchCollection ## import collections may clash with collections.Counter one 
-import geopandas as gpd
-import shapely.geometry ## patchcollection doesnt understand geopandas geometry
-import warnings
+import warnings, shapely.geometry ## patchcollection doesnt understand geopandas geometry
 
 import logging, ete3, argparse
-import numpy as np, pandas as pd, seaborn as sns
+import numpy as np, pandas as pd, seaborn as sns, geopandas as gpd
 from sklearn import manifold, metrics, cluster, neighbors, decomposition, preprocessing
 import sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib, datetime
-
 
 logger = logging.getLogger(__name__)
 logger.propagate = False

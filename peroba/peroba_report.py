@@ -5,10 +5,10 @@ matplotlib.use('Agg') # first rule to prevent system of chosing X11-based
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 
-from utils import *
-import phylodrawing as phylo
-import statsdrawing as stdraw
-import common
+from peroba.utils import *
+import peroba.phylodrawing as phylo
+import peroba.statsdrawing as stdraw
+from peroba import common
 
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False
@@ -108,6 +108,7 @@ included in the metadata. We add `NORW` sequences back whenever possible.
 Furthermore this analysis uses only a small subset of all available genomic data at COG-UK: it is based on sequences
 inferred to be relevant to the regional analysis, and even those may be removed (due to low quality or duplicates).
 
+This report was generated automatically with `peroba_report`, part of the [peroba suite](https://github.com/quadram-institute-bioscience/peroba).
 Software still under development.<br>
 """.format(today=datetime.datetime.now().strftime("%Y-%m-%d %H:%M")) 
     return md_description

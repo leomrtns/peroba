@@ -1,12 +1,12 @@
 import logging, ete3, argparse, treeswift
 import matplotlib
-import pkg_resources 
+import pkg_resources, gc  # garbage collector
 import numpy as np, pandas as pd
 
-from utils import *
-import common
-import regression as ml 
-import gc  # garbage collector
+
+from peroba.utils import *
+from peroba import common
+import peroba.regression as ml 
 
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False
@@ -113,7 +113,7 @@ class PerobaBackbone:
                     seqs_in_global.append(seq.id)
                 else:
                     seq.id = None
-        gc.collect()
+        #gc.collect()
 
         if len(s_new) > 0:
             logger.warning("Sequences not found in global database will be added by hand:\n%s\n", "   ".join(s_new))
@@ -223,15 +223,15 @@ class PerobaBackbone:
         self.l_seq = {x:y for x,y in self.g_seq.items() if x in self.l_csv["sequence_name"]}
         self.g_seq = {x:y for x,y in self.g_seq.items() if x in self.g_csv["sequence_name"]}
         
-        l_snp = [x for x in snp_aln if x.id in self.l_csv["sequence_name"]]
-        idx = sorted_uncertainty_from_alignment (l_snp, max_freq_n = 0.01)
-        logger.info("Compact representation uses %s SNPs (columns from local seqs with fewer Ns)", len(idx))
-        snp_aln = alignment_from_column_index (snp_aln, idx)
+        #l_snp = [x for x in snp_aln if x.id in self.l_csv["sequence_name"]]
+        #idx = sorted_uncertainty_from_alignment (l_snp, max_freq_n = 0.01)
+        #logger.info("Compact representation uses %s SNPs (columns from local seqs with fewer Ns)", len(idx))
+        #snp_aln = alignment_from_column_index (snp_aln, idx)
         self.l_snp = {x.id:x for x in snp_aln if x.id in self.l_csv["sequence_name"]}
         self.g_snp = {x.id:x for x in snp_aln if x.id in self.g_csv["sequence_name"]}
 
         logger.info ("split data into %s global and %s local sequences", str(self.g_csv.shape[0]), str(self.l_csv.shape[0]))
-        gc.collect() ## collect garbage
+        #gc.collect() ## collect garbage
 
     def remove_seq_tree_based_on_metadata (self, seqnames = None, local = False): 
         if seqnames is not None and local:
@@ -315,7 +315,6 @@ class PerobaBackbone:
         ## create list of accepted seqnames instead of deleting rows; replace peroba_tmp by peroba_group
         #for c in [x for x in replace_duplicate_cols if x in df.cols]: # most common value amongst identical sequences
         #    df[c] = df.groupby(["peroba_tmp"])[c].transform(pd.Series.mode) # transform() keeps index
-
 
         df = df.groupby("peroba_tmp").aggregate("first") # only one sequence from each cluster, following self.order_col preference
         df.set_index ("peroba_seq_uid", drop = True, inplace = True)

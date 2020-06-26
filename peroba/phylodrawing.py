@@ -9,7 +9,7 @@ import numpy as np, pandas as pd, seaborn as sns
 from sklearn import manifold, metrics, cluster, neighbors, decomposition, preprocessing
 import sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib
 
-import common
+from peroba import common
 
 logger = logging.getLogger(__name__) 
 logger.propagate = False ## otherwise it duplicates (own stream and generic stream)

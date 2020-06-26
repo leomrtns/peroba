@@ -63,6 +63,7 @@ setuptools.setup(
     entry_points = {
         "console_scripts": [
             "peroba_database = peroba.peroba_database:main",
+            "peroba_backbone = peroba.peroba_backbone:main",
             "peroba_report = peroba.peroba_report:main"
         ]
     }

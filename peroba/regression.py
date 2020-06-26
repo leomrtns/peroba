@@ -3,15 +3,11 @@
 import logging, ete3, argparse
 import numpy as np
 from Bio import Seq, SeqIO, Align, AlignIO, Phylo, Alphabet, pairwise2
-#import datetime, time, codecs, sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib
 import time, codecs, random
 from sklearn.neighbors import NearestNeighbors, BallTree ## KDTree does NOT accept hamming
 from sklearn.cluster import OPTICS
 import xxhash
-from utils import *
-#from Bio.SeqRecord import SeqRecord
-#from Bio.Align import AlignInfo, Applications
-#from fuzzywuzzy import fuzz ## fuzz.ratio(x, "E959D")
+from peroba.utils import *
 
 logger = logging.getLogger(__name__) 
 logger.propagate = False

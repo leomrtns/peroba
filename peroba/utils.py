@@ -130,8 +130,6 @@ def minimap2_find_neighbours (query_aln = None, target_aln = None, prefix = "/tm
     nn = dict()
     score = dict()
     for p in paf:
-        print ("DEBUG:1: ", p)
-        print ("DEBUG:2: ", nn)
         if p[0] in nn.keys(): ## TypeError: unhashable type: 'list'
             if (score[p[0]] - p[3]) < 1e-5: # usually zero or negative, assuming sorted results
                 nn[p[0]] += [p[1]]

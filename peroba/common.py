@@ -12,7 +12,7 @@ import numpy as np, pandas as pd
 from Bio import Seq, SeqIO
 import random, datetime, sys, lzma, gzip, bz2, re, glob, collections, subprocess, os, itertools, pathlib, base64
 import pandas_profiling # ProfileReport
-from utils import * 
+from peroba.utils import * 
 
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False
@@ -434,13 +434,13 @@ def sequence_dict_pair_with_better_quality (s1, s2, q1=None, q2=None, matched=No
     for x in matched:
         if q1[x] > q2[x]: ## global is better
             better[0].append(x)
-            debug_seq[f"{x}_G_pass"] = s1[x]
-            debug_seq[f"{x}_L_fail"] = s2[x]
+            debug_seq[f"{x}_G_pass_{q1[x]}"] = SeqRecord (Seq.Seq(str(s1[x].seq)), id=x)
+            debug_seq[f"{x}_L_fail_{q2[x]}"] = SeqRecord (Seq.Seq(str(s2[x].seq)), id=x)
             s2[x].seq = s1[x].seq
         if q1[x] < q2[x]: ## local is better
             better[1].append(x)
-            debug_seq[f"{x}_G_fail"] = s1[x]
-            debug_seq[f"{x}_L_pass"] = s2[x]
+            debug_seq[f"{x}_G_fail_{q1[x]}"] = SeqRecord (Seq.Seq(str(s1[x].seq)), id=x) 
+            debug_seq[f"{x}_L_pass_{q2[x]}"] = SeqRecord (Seq.Seq(str(s2[x].seq)), id=x) 
             s1[x].seq = s2[x].seq
     logger.info("{} matched pairs, with {} better on {} and {} better on {} sequences".format(len(matched), 
         len(better[0]), description[0], len(better[1]), description[1]))

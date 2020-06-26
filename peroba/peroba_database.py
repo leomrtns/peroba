@@ -1,16 +1,9 @@
 #!/usr/bin/env python
 
-## this is a simplified module that gets the job done; for a more complete implementation see discarded functions file
-
 import logging, ete3, argparse
-#import numpy as np, pandas as pd, seaborn as sns
-#from Bio import Seq, SeqIO, Align, AlignIO, Phylo, Alphabet, pairwise2
-#from Bio.SeqRecord import SeqRecord
-#import ete3 
-#import datetime, time, codecs, sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib
 
-from utils import *
-import common 
+from peroba.utils import *
+from peroba import common 
 
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False
