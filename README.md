@@ -23,8 +23,31 @@ for Phylogenetic Epidemiology with ROBust Assignment.
 3. **`peroba_report`**: once the user finishes the analysis (i.e. has a phylogenetic tree using suggestions from
    `peroba_backbone`), this script will estimate ancestral states and generate a PDF report.
 
+## Installation
+This software depends on several other packages, installable through conda or pip. The suggested installation procedure
+is to 
+```
+```
+It relies on the [Eisvogel latex template for pandoc](https://github.com/Wandmalfarbe/pandoc-latex-template) to generate the report, 
+which is included here (BSD 3-clause).
+
+### Dependencies not included
+Besides the dependencies listed above (a full list can be seen in the environment file) you will need to download by hand the 
+Sars-cov2 sequence and metadata files.
+
+You will also need to download and copy the shapefiles for plotting the maps. 
+The postcode information is kindly provided by [OpenDoorLogistics](https://www.opendoorlogistics.com) (please check
+[their license terms](https://www.opendoorlogistics.com/data):
+```
+wget https://www.opendoorlogistics.com/wp-content/uploads/Data/UK-postcode-boundaries-Jan-2015.zip
+unzip  UK-postcode-boundaries-Jan-2015.zip -d postcodes
+cp postcodes/Distribution/Districts.* ${perobadir}/peroba/data/
+```
+
+
+
 ## Instructions
-You can find [a tutorial on the software here](docs/023.peroba_pipeline.ipynb).
+You can find [a tutorial on using the software here](docs/023.peroba_pipeline.ipynb).
 
 ## Caveats
 Not all sequences pass the sequencing quality control. Those that do may be excluded from COGUK phylogenetic analysis,
