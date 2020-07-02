@@ -36,15 +36,23 @@ Besides the dependencies listed above (a full list can be seen in the environmen
 Sars-cov2 sequence and metadata files.
 
 You will also need to download and copy the shapefiles for plotting the maps. 
-The postcode information is kindly provided by [OpenDoorLogistics](https://www.opendoorlogistics.com) (please check
+The postcode shapefiles are kindly provided by [OpenDoorLogistics](https://www.opendoorlogistics.com) (please check
 [their license terms](https://www.opendoorlogistics.com/data):
 ```
 wget https://www.opendoorlogistics.com/wp-content/uploads/Data/UK-postcode-boundaries-Jan-2015.zip
 unzip  UK-postcode-boundaries-Jan-2015.zip -d postcodes
 cp postcodes/Distribution/Districts.* ${perobadir}/peroba/data/
 ```
+Where `${perobadir}` is the root directory of your `peroba` installation. The directory `${perobadir}/peroba/dir` should
+exist. 
 
-
+Likewise, the `adm2` location correspond to NUTS 2 regions, and can be downloaded from
+[GADM](https://gadm.org/download_country_v3.html):
+```
+wget https://biogeo.ucdavis.edu/data/gadm3.6/shp/gadm36_GBR_shp.zip
+unzip gadm36_GBR_shp.zip -d adm2
+cp adm2/gadm36_GBR_2.shp ${perobadir}/peroba/data/
+```
 
 ## Instructions
 You can find [a tutorial on using the software here](docs/023.peroba_pipeline.ipynb).
