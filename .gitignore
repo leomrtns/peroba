@@ -1,7 +1,7 @@
 /build
 .ipynb_checkpoints
 peroba.egg-info
-peroba/data/gadm36_GBR_2.shp
+peroba/data/gadm36_GBR_2.*
 peroba/data/Districts.*
 
 ## suggested by github
