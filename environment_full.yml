@@ -5,21 +5,24 @@ channels:
   - defaults
 dependencies:
   - mafft>7.467
+  - raxml-ng
+  - parallel
   - iqtree>2
   - python=3.6
   - rapidnj
+  - iqtree
   - pandas
   - pip
   - biopython
   - seaborn
+  - parasail-python 
   - scikit-bio 
   - scikit-learn 
-  - geopandas
-  - basemap
+  - goalign
+  - gotree
   - ete3
-  - xxhash
-  - xz
   - pip:
     - .  # this means run pip on this directory's setup.py 
+    - pandas==1.0.1
     - pytools==2020.1
     - pastml
