@@ -9,8 +9,18 @@ __Leonardo de Oliveira Martins<sup>1</sup>__
 incorporated. 
 It is been developed as a phylogenetic tracking tool to aggregate samples sequenced at the QIB 
 with global information from [COG-UK](https://www.cogconsortium.uk/) and [GISAID](https://www.gisaid.org/). 
-Therefore you will not find any data here, although [all COG-UK data are available
+Therefore you will not find any real data here, although [all COG-UK data are available
 online](https://www.cogconsortium.uk/data/).
+If you find any report/results/data here, it will be random/rubish (due to privacy reasons) and cannot be used or
+interpreted. 
+
+This tool is not useful (yet) to the scientific community at large, you may need to be part of the COGUK consortium to
+make sense of some variables.
+Peroba is under active testing and development, being employed at the QIB but with hope others may find it useful.
+If you are looking for more stable COGUK-related tools, please see the ones available at 
+[https://github.com/COG-UK](https://github.com/COG-UK) (in particular [civet](https://github.com/COG-UK/civet) or 
+[phylo reports](https://github.com/COG-UK/phylo-reports)) and [https://github.com/cov-lineages](https://github.com/cov-lineages).
+
 
 **peroba** is the name of a Brazilian timber tree, but if you like acronyms it stands 
 for Phylogenetic Epidemiology with ROBust Assignment. 
@@ -24,20 +34,29 @@ for Phylogenetic Epidemiology with ROBust Assignment.
    `peroba_backbone`), this script will estimate ancestral states and generate a PDF report.
 
 ## Installation
-This software depends on several other packages, installable through conda or pip. The suggested installation procedure
-is to 
+This software depends on several other packages, installable through conda or pip. 
+The suggested installation procedure is to create a conda environment (to take care of dependencies) and then installing
+the python package:
 ```
-```
-It relies on the [Eisvogel latex template for pandoc](https://github.com/Wandmalfarbe/pandoc-latex-template) to generate the report, 
-which is included here (BSD 3-clause).
+conda env create -f environment.yml
+conda activate peroba
+python setup.py install
 
-### Dependencies not included
+```
+
+The report generation relies on the [Eisvogel latex template for pandoc](https://github.com/Wandmalfarbe/pandoc-latex-template), 
+which is included here (it's released under a BSD 3-clause).
+The complete list of dependencies is described in the file [environment.yml](./environment.yml).
+Please let me know if there are missing dependencies, although `peroba` is under active development and its behaviour
+may change without notice. 
+
+### Shapefiles 
 Besides the dependencies listed above (a full list can be seen in the environment file) you will need to download by hand the 
 Sars-cov2 sequence and metadata files.
 
 You will also need to download and copy the shapefiles for plotting the maps. 
 The postcode shapefiles are kindly provided by [OpenDoorLogistics](https://www.opendoorlogistics.com) (please check
-[their license terms](https://www.opendoorlogistics.com/data):
+[their license terms](https://www.opendoorlogistics.com/data)):
 ```
 wget https://www.opendoorlogistics.com/wp-content/uploads/Data/UK-postcode-boundaries-Jan-2015.zip
 unzip  UK-postcode-boundaries-Jan-2015.zip -d postcodes
@@ -58,10 +77,12 @@ cp adm2/gadm36_GBR_2.shp ${perobadir}/peroba/data/
 You can find [a tutorial on using the software here](docs/023.peroba_pipeline.ipynb).
 
 ## Caveats
-Not all sequences pass the sequencing quality control. Those that do may be excluded from COGUK phylogenetic analysis,
-which means we won't have metadata (importantly, `sequence_name` which allows mapping between tree, sequence, and epi
+
+When interpreting any result, please remember that not all sequences pass the sequencing quality control. 
+Those that do may be excluded from COGUK phylogenetic analysis,
+which means we won't have metadata (in particular `sequence_name`, which allows mapping between tree, sequence, and epi
 data) information from them. 
-We minimise this by using local information whenever possible, but still the reasons for exclusion remain. 
+We minimise this by using local information whenever possible, but still the reasons for exclusion remain.
 
 ## License 
 SPDX-License-Identifier: GPL-3.0-or-later
