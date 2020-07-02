@@ -23,7 +23,7 @@ logger.addHandler(stream_log)
     
 seaborn_rc = {"figure.dpi":300, "font.size":8, "axes.titlesize":8,"axes.labelsize":8, "xtick.labelsize":6, "ytick.labelsize":6}  
 # basemap needs {dbf,fix,shp,prj, shx} files so suffix excluded, while geopandas needs just the shp file
-uk_postcode_area_file = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/UKpostcodeDistricts") 
+uk_postcode_area_file = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/Districts") 
 uk_gadm_nuts2_file = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/gadm36_GBR_2") 
 
 
