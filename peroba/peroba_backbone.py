@@ -113,7 +113,7 @@ class PerobaBackbone:
                     seqs_in_global.append(seq.id)
                 else:
                     seq.id = None
-        #gc.collect()
+        gc.collect()
 
         if len(s_new) > 0:
             logger.warning("Sequences not found in global database will be added by hand:\n%s\n", "   ".join(s_new))
@@ -231,7 +231,7 @@ class PerobaBackbone:
         self.g_snp = {x.id:x for x in snp_aln if x.id in self.g_csv["sequence_name"]}
 
         logger.info ("split data into %s global and %s local sequences", str(self.g_csv.shape[0]), str(self.l_csv.shape[0]))
-        #gc.collect() ## collect garbage
+        gc.collect() ## collect garbage
 
     def remove_seq_tree_based_on_metadata (self, seqnames = None, local = False): 
         if seqnames is not None and local:
@@ -390,6 +390,7 @@ class PerobaBackbone:
         # search amongst all sequences, not only those with lineage info
         neighbours = ml.list_n_neighbours (self.g_snp, aln_d, blocks, leaf_size, nn)
         neighbours = list(set(neighbours + neighbours1))
+        gc.collect() ## collect garbage
         logger.info("Found %s neighbours through hashed nearest-neighbours", len(neighbours))
         return neighbours
 

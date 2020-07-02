@@ -334,7 +334,7 @@ def distance_from_consensus (query, consensus):
             if s1 != s2:
                 d1 += 1 ## any difference
                 l = len(set(Seq.IUPAC.IUPACData.ambiguous_dna_values[s1]).intersection(Seq.IUPAC.IUPACData.ambiguous_dna_values[s2]))
-                if (l > 0): ## incompatible (e.g. W and A are compatible b/c W = A or T)
+                if (l == 0): ## incompatible (e.g. W and A are compatible b/c W = A or T)
                     d2 +=1
     return [d1/counter, d2/counter] ## or return 3 values
 
