@@ -83,6 +83,9 @@ which means we won't have metadata (in particular `sequence_name`, which allows 
 data) information from them. 
 We minimise this by using local information whenever possible, but still the reasons for exclusion remain.
 
+This is not a general-purpose software. It is being released publicly in the hope that other researchers can build upon
+it. 
+
 ## License 
 SPDX-License-Identifier: GPL-3.0-or-later
 
