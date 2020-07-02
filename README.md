@@ -14,8 +14,8 @@ online](https://www.cogconsortium.uk/data/).
 If you find any report/results/data here, it will be random/rubish (due to privacy reasons) and cannot be used or
 interpreted. 
 
-This tool is not useful (yet) to the scientific community at large, you may need to be part of the COGUK consortium to
-make sense of some variables.
+This tool is not useful (yet) to the scientific community at large, you may need to be familiar and have access to the 
+COGUK consortium to make sense of some variables.
 Peroba is under active testing and development, being employed at the QIB but with hope others may find it useful.
 If you are looking for more stable COGUK-related tools, please see the ones available at 
 [https://github.com/COG-UK](https://github.com/COG-UK) (in particular [civet](https://github.com/COG-UK/civet) or 
@@ -37,11 +37,10 @@ for Phylogenetic Epidemiology with ROBust Assignment.
 This software depends on several other packages, installable through conda or pip. 
 The suggested installation procedure is to create a conda environment (to take care of dependencies) and then installing
 the python package:
-```
+```bash
 conda env create -f environment.yml
 conda activate peroba
 python setup.py install
-
 ```
 
 The report generation relies on the [Eisvogel latex template for pandoc](https://github.com/Wandmalfarbe/pandoc-latex-template), 
@@ -57,7 +56,7 @@ Sars-cov2 sequence and metadata files.
 You will also need to download and copy the shapefiles for plotting the maps. 
 The postcode shapefiles are kindly provided by [OpenDoorLogistics](https://www.opendoorlogistics.com) (please check
 [their license terms](https://www.opendoorlogistics.com/data)):
-```
+```bash
 wget https://www.opendoorlogistics.com/wp-content/uploads/Data/UK-postcode-boundaries-Jan-2015.zip
 unzip  UK-postcode-boundaries-Jan-2015.zip -d postcodes
 cp postcodes/Distribution/Districts.* ${perobadir}/peroba/data/
@@ -67,7 +66,7 @@ exist.
 
 Likewise, the `adm2` location correspond to NUTS 2 regions, and can be downloaded from
 [GADM](https://gadm.org/download_country_v3.html):
-```
+```bash
 wget https://biogeo.ucdavis.edu/data/gadm3.6/shp/gadm36_GBR_shp.zip
 unzip gadm36_GBR_shp.zip -d adm2
 cp adm2/gadm36_GBR_2.shp ${perobadir}/peroba/data/
