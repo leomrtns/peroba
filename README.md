@@ -22,8 +22,8 @@ If you are looking for more stable COGUK-related tools, please see the ones avai
 [phylo reports](https://github.com/COG-UK/phylo-reports)) and [https://github.com/cov-lineages](https://github.com/cov-lineages).
 
 
-**peroba** is the name of a Brazilian timber tree, but if you like acronyms it stands 
-for Phylogenetic Epidemiology with ROBust Assignment. 
+**peroba** is the name of an [endangered Brazilian timber tree](https://en.wikipedia.org/wiki/Aspidosperma_polyneuron).
+But if you like acronyms it stands for Phylogenetic Epidemiology with ROBust Assignment. 
 
 ## Modules
 **peroba** is composed of three modules, that should be run in order:
@@ -69,7 +69,7 @@ Likewise, the `adm2` location correspond to NUTS 2 regions, and can be downloade
 ```bash
 wget https://biogeo.ucdavis.edu/data/gadm3.6/shp/gadm36_GBR_shp.zip
 unzip gadm36_GBR_shp.zip -d adm2
-cp adm2/gadm36_GBR_2.shp ${perobadir}/peroba/data/
+cp adm2/gadm36_GBR_2.* ${perobadir}/peroba/data/
 ```
 
 ## Instructions
