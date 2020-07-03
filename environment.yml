@@ -16,6 +16,10 @@ dependencies:
   - scikit-learn 
   - geopandas
   - basemap
+  - basemap-data-hires
+  - mapclassify
+  - descartes
+  - tabulate
   - ete3
   - xxhash
   - xz
