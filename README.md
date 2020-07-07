@@ -39,7 +39,7 @@ Before installing peroba, you will need to download and copy the shapefiles for 
 distribute here due to copyright issues.
 
 ### Download shapefiles
-They can be downloaded however, and the postcode shapefiles are kindly provided by [OpenDoorLogistics](https://www.opendoorlogistics.com) (please check
+Shapefiles can be downloaded however, and the postcode shapefiles are kindly provided by [OpenDoorLogistics](https://www.opendoorlogistics.com) (please check
 [their license terms](https://www.opendoorlogistics.com/data)):
 ```bash
 wget https://www.opendoorlogistics.com/wp-content/uploads/Data/UK-postcode-boundaries-Jan-2015.zip
