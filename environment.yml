@@ -6,7 +6,7 @@ channels:
 dependencies:
   - mafft>7.467
   - iqtree>2
-  - python=3.6
+  - python>3.6
   - rapidnj
   - pandas
   - pip
@@ -21,6 +21,7 @@ dependencies:
   - mapclassify
   - descartes
   - tabulate
+  - treeswift
   - ete3
   - xxhash
   - xz

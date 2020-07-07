@@ -38,9 +38,15 @@ This software depends on several other packages, installable through conda or pi
 The suggested installation procedure is to create a conda environment (to take care of dependencies) and then installing
 the python package:
 ```bash
-conda env create -f environment.yml
+conda env create -f environment.yml  
 conda activate peroba
 python setup.py install
+```
+
+Since this software is still under development, these two commands are quite useful:
+```
+conda env update -f environment.yml # updat conda evironment after changing dependencies
+pip install -e . # install  # installs in development mode (modifications to python files are live)
 ```
 
 The report generation relies on the [Eisvogel latex template for pandoc](https://github.com/Wandmalfarbe/pandoc-latex-template), 
