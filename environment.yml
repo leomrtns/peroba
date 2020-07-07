@@ -27,4 +27,5 @@ dependencies:
   - pip:
     - .  # this means run pip on this directory's setup.py 
     - pytools==2020.1
+    - pandas_profiling
     - pastml
