@@ -23,7 +23,7 @@ dependencies:
   - tabulate
   - treeswift
   - ete3
-  - conda-forge::xxhash
+  - python-xxhash
   - xz
   - pip:
     - .  # this means run pip on this directory's setup.py 
