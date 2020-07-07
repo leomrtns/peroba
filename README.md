@@ -33,8 +33,31 @@ But if you like acronyms it stands for Phylogenetic Epidemiology with ROBust Ass
 3. **`peroba_report`**: once the user finishes the analysis (i.e. has a phylogenetic tree using suggestions from
    `peroba_backbone`), this script will estimate ancestral states and generate a PDF report.
 
+### Shapefiles 
+Before installing peroba, you will need to download and copy the shapefiles for plotting the maps, which we cannot
+distribute here due to copyright issues. 
+They can be downloaded however, and the postcode shapefiles are kindly provided by [OpenDoorLogistics](https://www.opendoorlogistics.com) (please check
+[their license terms](https://www.opendoorlogistics.com/data)):
+```bash
+wget https://www.opendoorlogistics.com/wp-content/uploads/Data/UK-postcode-boundaries-Jan-2015.zip
+unzip  UK-postcode-boundaries-Jan-2015.zip -d postcodes
+cp postcodes/Distribution/Districts.* ${perobadir}/peroba/data/
+```
+Where `${perobadir}` is the root directory of your `peroba` installation. The directory `${perobadir}/peroba/dir` should
+exist. 
+
+Likewise, the `adm2` location correspond to NUTS 2 regions, and can be downloaded from
+[GADM](https://gadm.org/download_country_v3.html):
+```bash
+wget https://biogeo.ucdavis.edu/data/gadm3.6/shp/gadm36_GBR_shp.zip
+unzip gadm36_GBR_shp.zip -d adm2
+cp adm2/gadm36_GBR_2.* ${perobadir}/peroba/data/
+```
+
+You will also need to download by hand the Sars-cov2 sequence and metadata files, which is not covered here. 
+
 ## Installation
-This software depends on several other packages, installable through conda or pip. 
+This software depends on several other packages, installable through conda or pip.
 The suggested installation procedure is to create a conda environment (to take care of dependencies) and then installing
 the python package:
 ```bash
@@ -56,28 +79,6 @@ The complete list of dependencies is described in the file [environment.yml](./e
 Please let me know if there are missing dependencies, although `peroba` is under active development and its behaviour
 may change without notice. 
 
-### Shapefiles 
-Besides the dependencies listed above (a full list can be seen in the environment file) you will need to download by hand the 
-Sars-cov2 sequence and metadata files.
-
-You will also need to download and copy the shapefiles for plotting the maps. 
-The postcode shapefiles are kindly provided by [OpenDoorLogistics](https://www.opendoorlogistics.com) (please check
-[their license terms](https://www.opendoorlogistics.com/data)):
-```bash
-wget https://www.opendoorlogistics.com/wp-content/uploads/Data/UK-postcode-boundaries-Jan-2015.zip
-unzip  UK-postcode-boundaries-Jan-2015.zip -d postcodes
-cp postcodes/Distribution/Districts.* ${perobadir}/peroba/data/
-```
-Where `${perobadir}` is the root directory of your `peroba` installation. The directory `${perobadir}/peroba/dir` should
-exist. 
-
-Likewise, the `adm2` location correspond to NUTS 2 regions, and can be downloaded from
-[GADM](https://gadm.org/download_country_v3.html):
-```bash
-wget https://biogeo.ucdavis.edu/data/gadm3.6/shp/gadm36_GBR_shp.zip
-unzip gadm36_GBR_shp.zip -d adm2
-cp adm2/gadm36_GBR_2.* ${perobadir}/peroba/data/
-```
 
 ## Instructions
 You can find [a tutorial on using the software here](docs/023.peroba_pipeline.ipynb).
