@@ -33,9 +33,12 @@ But if you like acronyms it stands for Phylogenetic Epidemiology with ROBust Ass
 3. **`peroba_report`**: once the user finishes the analysis (i.e. has a phylogenetic tree using suggestions from
    `peroba_backbone`), this script will estimate ancestral states and generate a PDF report.
 
-### Shapefiles 
+## Installation
+
 Before installing peroba, you will need to download and copy the shapefiles for plotting the maps, which we cannot
-distribute here due to copyright issues. 
+distribute here due to copyright issues.
+
+### Download shapefiles
 They can be downloaded however, and the postcode shapefiles are kindly provided by [OpenDoorLogistics](https://www.opendoorlogistics.com) (please check
 [their license terms](https://www.opendoorlogistics.com/data)):
 ```bash
@@ -56,7 +59,8 @@ cp adm2/gadm36_GBR_2.* ${perobadir}/peroba/data/
 
 You will also need to download by hand the Sars-cov2 sequence and metadata files, which is not covered here. 
 
-## Installation
+### Generate a conda environment
+
 This software depends on several other packages, installable through conda or pip.
 The suggested installation procedure is to create a conda environment (to take care of dependencies) and then installing
 the python package:
