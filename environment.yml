@@ -10,7 +10,7 @@ dependencies:
   - rapidnj
   - pandas
   - pip
-  - biopython
+  - biopython>1.68
   - seaborn
   - scikit-bio 
   - scikit-learn 

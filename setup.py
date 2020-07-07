@@ -46,7 +46,15 @@ setuptools.setup(
            'ete3',
            'pastml',
            'numpy',
-           'matplotlib'
+           'matplotlib',
+           'pandas',
+           'seaborn',
+           'basemap',
+           'geopandas',
+           'treeswift',
+           'xxhash',
+           'pandas_profiling',
+           'scikit-learn'
        ],
     classifiers = [
         "Development Status :: 2 - Pre-Alpha",

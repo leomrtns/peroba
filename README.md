@@ -46,8 +46,8 @@ wget https://www.opendoorlogistics.com/wp-content/uploads/Data/UK-postcode-bound
 unzip  UK-postcode-boundaries-Jan-2015.zip -d postcodes
 cp postcodes/Distribution/Districts.* ${perobadir}/peroba/data/
 ```
-Where `${perobadir}` is the root directory of your `peroba` installation. The directory `${perobadir}/peroba/dir` should
-exist. 
+Where `${perobadir}` is the root directory of your `peroba` installation. 
+The directory `${perobadir}/peroba/data` should already exist when you cloned this repo.
 
 Likewise, the `adm2` location correspond to NUTS 2 regions, and can be downloaded from
 [GADM](https://gadm.org/download_country_v3.html):
