@@ -1,12 +1,9 @@
+from peroba import common ## matplotlib trick before anything
+from peroba.utils import *
+import peroba.regression as ml 
 import logging, ete3, argparse, treeswift
-import matplotlib
 import pkg_resources, gc  # garbage collector
 import numpy as np, pandas as pd
-
-
-from peroba.utils import *
-from peroba import common
-import peroba.regression as ml 
 
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False

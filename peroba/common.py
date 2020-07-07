@@ -1,4 +1,7 @@
+import os
+os.environ['QT_QPA_PLATFORM']='offscreen'
 import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib import rcParams, cm, colors, patches
 
@@ -10,7 +13,7 @@ from matplotlib import rcParams, cm, colors, patches
 import logging, ete3
 import numpy as np, pandas as pd
 from Bio import Seq, SeqIO
-import random, datetime, sys, lzma, gzip, bz2, re, glob, collections, subprocess, os, itertools, pathlib, base64
+import random, datetime, sys, lzma, gzip, bz2, re, glob, collections, subprocess, itertools, pathlib, base64
 import pandas_profiling # ProfileReport
 from peroba.utils import * 
 

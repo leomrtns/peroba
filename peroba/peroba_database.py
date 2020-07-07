@@ -1,9 +1,7 @@
 #!/usr/bin/env python
-
-import logging, ete3, argparse
-
+from peroba import common # first, since calls matplotlib 
 from peroba.utils import *
-from peroba import common 
+import logging, ete3, argparse
 
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False

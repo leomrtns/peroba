@@ -1,15 +1,19 @@
 #!/usr/bin/env python
+from peroba import common
+
+import os
+os.environ['QT_QPA_PLATFORM']='offscreen'
 import matplotlib
 matplotlib.use('Agg') # first rule to prevent system of chosing X11-based
 import matplotlib.pyplot as plt
 from matplotlib import rcParams, cm, colors # colormap
+
 from pastml.acr import acr
 import logging, ete3, argparse
 import numpy as np, pandas as pd, seaborn as sns
 from sklearn import manifold, metrics, cluster, neighbors, decomposition, preprocessing
-import sys, gzip, bz2, re, glob, pickle, collections, subprocess, os, errno, random, itertools, pathlib
+import sys, gzip, bz2, re, glob, pickle, collections, subprocess, errno, random, itertools, pathlib
 
-from peroba import common
 
 logger = logging.getLogger(__name__) 
 logger.propagate = False ## otherwise it duplicates (own stream and generic stream)

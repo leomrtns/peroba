@@ -1,14 +1,10 @@
-import logging, ete3, argparse, pathlib
-import pandas as pd
-import matplotlib
-matplotlib.use('Agg') # first rule to prevent system of chosing X11-based
-import matplotlib.pyplot as plt
-from matplotlib import rcParams
-
+from peroba import common
 from peroba.utils import *
 import peroba.phylodrawing as phylo
 import peroba.statsdrawing as stdraw
-from peroba import common
+
+import logging, ete3, argparse, pathlib
+import pandas as pd
 
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False

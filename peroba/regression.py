@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from peroba.utils import *
 import logging, ete3, argparse
 import numpy as np
 from Bio import Seq, SeqIO, Align, AlignIO, Phylo, Alphabet, pairwise2
@@ -7,7 +8,6 @@ import time, codecs, random
 from sklearn.neighbors import NearestNeighbors, BallTree ## KDTree does NOT accept hamming
 from sklearn.cluster import OPTICS
 import xxhash
-from peroba.utils import *
 
 logger = logging.getLogger(__name__) 
 logger.propagate = False
