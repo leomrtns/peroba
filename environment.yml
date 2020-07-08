@@ -8,6 +8,7 @@ dependencies:
   - iqtree>2
   - python>3.6
   - snp-sites
+  - minimap2
   - rapidnj
   - pandas
   - pip
