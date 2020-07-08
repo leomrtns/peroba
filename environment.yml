@@ -7,6 +7,7 @@ dependencies:
   - mafft>7.467
   - iqtree>2
   - python>3.6
+  - snp-sites
   - rapidnj
   - pandas
   - pip
