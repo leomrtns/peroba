@@ -9,6 +9,7 @@ dependencies:
   - python>3.6
   - snp-sites
   - minimap2
+  - pandoc>2.8
   - rapidnj
   - pandas
   - pip
@@ -16,7 +17,7 @@ dependencies:
   - seaborn
   - scikit-bio 
   - scikit-learn 
-  - matplotlib-base
+  - matplotlib
   - geopandas
   - basemap
   - basemap-data-hires

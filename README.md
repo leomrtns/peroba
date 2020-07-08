@@ -38,6 +38,14 @@ But if you like acronyms it stands for Phylogenetic Epidemiology with ROBust Ass
 Before installing peroba, you will need to download and copy the shapefiles for plotting the maps, which we cannot
 distribute here due to copyright issues.
 
+### Requirements
+
+* `conda`
+* `texlive`
+* linux 
+* python > 3.6 
+* internet access to download shapefiles
+
 ### Download shapefiles
 Shapefiles can be downloaded however, and the postcode shapefiles are kindly provided by [OpenDoorLogistics](https://www.opendoorlogistics.com) (please check
 [their license terms](https://www.opendoorlogistics.com/data)):
@@ -57,8 +65,8 @@ unzip gadm36_GBR_shp.zip -d adm2
 cp adm2/gadm36_GBR_2.* ${perobadir}/peroba/data/
 ```
 
-You will also need to download by hand the Sars-cov2 sequence and metadata files, which is not covered here. 
-
+You will also need to download by hand the Sars-cov2 sequence and metadata files, which is not covered here.
+I have never tried, but it might work to download the publicly available data on [COG-UK](https://github.com/COG-UK/data).
 ### Generate a conda environment
 
 This software depends on several other packages, installable through conda or pip.
@@ -76,6 +84,16 @@ Since this software is still under development, these two commands are quite use
 conda env update -f environment.yml # updat conda evironment after changing dependencies
 pip install -e . # install  # installs in development mode (modifications to python files are live)
 ```
+
+There are two system packages that might need to be installed outside conda, `libGL` and `texlive`:
+```
+apt-get install libgl1-mesa-glx texlive-full
+```
+`ete3` complains about missing `lbGL` [which is safer to install system-wise](https://github.com/conda-forge/pygridgen-feedstock/issues/10);
+To test it, type `from PyQt5 import QtGui` in a python console and see if you are good to go.
+And `texlive` is for the PDF report generation (`texlive-full` is a monster, but you won't need to worry about missing
+fonts again :D )
+
 
 The report generation relies on the [Eisvogel latex template for pandoc](https://github.com/Wandmalfarbe/pandoc-latex-template), 
 which is included here (it's released under a BSD 3-clause).
