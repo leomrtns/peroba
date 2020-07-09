@@ -471,3 +471,8 @@ def save_sequence_dict_to_file (seqs, fname=None, use_seq_id = False):
                 rec.id = name ## make sure alignment will have same names
     logger.info(f"Finished saving sequences")
     return os.path.basename(fname)
+
+def local_name_run (seq_name):
+    x = seq_name.split(".")
+    if len(x) > 1: return x[0], int(x[1])
+    else:          return x[0], 0
