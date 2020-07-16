@@ -171,7 +171,7 @@ def rename_columns_metadata (df0):
         'sex':'source_sex',
         'age':'source_age'}
     for old, new in rename_dict.items():
-        if old in df.columns: 
+        if old in df.columns and new not in df.columns: # cogul has a new column "sample_date
             df.rename(columns={old:new}, inplace=True)
     no_edin = {x:x.replace("edin_", "") for x in list(df.columns) if x.startswith("edin_")}
     df.rename(columns=no_edin, inplace=True)
