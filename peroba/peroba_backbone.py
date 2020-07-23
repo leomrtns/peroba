@@ -139,7 +139,7 @@ class PerobaBackbone:
         if len(seqs_in_global) > 0:
             seq_list = [x for x in sequence.values() if x.id not in seqs_in_global]
         else:
-            seq_list = sequence.values()
+            seq_list = [x for x in sequence.values()]
 
         if len(seq_list) > 0: # we have new sequences, not yet in COGUK
             sqn = [x.id for x in seq_list]
