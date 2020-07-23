@@ -203,7 +203,7 @@ class PerobaBackbone:
             if col in df.columns:
                 df[col].fillna ("", inplace = True) 
 
-        if extended_mode is 0: # favourite categories are NORW-centric 
+        if extended_mode == 0: # favourite categories are NORW-centric 
             for col,favs in favourite_cats.items():
                 if col in df.columns:
                     values = [x for x in df[col].unique() if x not in favs + [""]] 
@@ -344,10 +344,10 @@ class PerobaBackbone:
                 ["acc_lineage", 1000], 
                 ["del_lineage", 1000]
                 ]
-        if extended_mode is 1: # more permissive since many non-UK sequences don't have this info
+        if extended_mode == 1: # more permissive since many non-UK sequences don't have this info
             clade_rule = [[x[0], int(x[1]/2), 4 * x[2]] for x in clade_rule] # zero is fine 
             missing_rule = [[x[0], 16 * x[1]] for x in missing_rule]
-        if extended_mode is 2: # more permissive since many non-UK sequences don't have this info
+        if extended_mode == 2: # more permissive since many non-UK sequences don't have this info
             clade_rule = [[x[0], int(x[1]/2), 8 * x[2]] for x in clade_rule] # zero is fine 
             missing_rule = [[x[0], 32 * x[1]] for x in missing_rule]
 
@@ -429,10 +429,10 @@ class PerobaBackbone:
         return neighbours
 
     def find_neighbours (self):
-        if extended_mode is 2:
+        if extended_mode == 2:
             n1 = self.find_neighbours_ball(blocks = 1000, leaf_size = 400, dist_blocks = 6, nn = 20) 
             n2 = self.find_neighbours_paf (blocks = 2000, leaf_size = 500, n_segments = 2, nn = 30, exclude = n1) 
-        elif extended_mode is 1:
+        elif extended_mode == 1:
             n1 = self.find_neighbours_ball(blocks = 2000, leaf_size = 400, dist_blocks = 4, nn = 20) 
             n2 = self.find_neighbours_paf (blocks = 3000, leaf_size = 500, n_segments = 1, nn = 20, exclude = n1) 
         else: ## local (COGUK) mode
@@ -661,9 +661,9 @@ def main():
     else: input_d = current_working_dir
 
     extended_mode = args.global_level
-    if extended_mode is 0:
+    if extended_mode == 0:
         logger.info("Assuming all sequences are from NORW/COGUK (subsampling will be UK-centric)")
-    elif extended_mode is 1:
+    elif extended_mode == 1:
         logger.info("Extended (global) mode: will use more GISAID data, with settings similar to the classic (COGUK) search")
     else:
         extended_mode = 2
