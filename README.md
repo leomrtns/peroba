@@ -76,13 +76,13 @@ the python package:
 conda update -n base -c defaults conda # probably not needed, but some machines complained about it
 conda env create -f environment.yml  
 conda activate peroba
-python setup.py install
+python setup.py install # or "pip install ." 
 ```
 
 Since this software is still under development, these two commands are quite useful:
 ```bash
 conda env update -f environment.yml # updat conda evironment after changing dependencies
-pip install -e . # install  # installs in development mode (modifications to python files are live)
+pip install -e . # installs in development mode (modifications to python files are live)
 ```
 
 There are two system packages that might need to be installed outside conda, `libGL` and `texlive`:

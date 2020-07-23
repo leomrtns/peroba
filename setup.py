@@ -42,7 +42,7 @@ setuptools.setup(
     python_requires = '>={}'.format('.'.join(str(n) for n in min_version)),
     license='GPLv3+',
     install_requires=[
-           'biopython >= 1.68',
+           'biopython >= 1.70',
            'ete3',
            'pastml',
            'numpy',

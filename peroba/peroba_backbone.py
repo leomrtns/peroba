@@ -14,8 +14,8 @@ stream_log.setLevel(logging.DEBUG)
 logger.addHandler(stream_log)
 
 current_working_dir = os.getcwd()
-
-# TODO: we can create a "priority" column based on geography, to sort/preference
+extended_mode = 0 
+# TODO: we can create a "priority" column based on geography or phylogeny, to sort/preference
 
 # order of preference for samples (True => smaller values preferred)
 prefsort = [
@@ -73,7 +73,7 @@ class PerobaBackbone:
     sort_cols = None 
     sort_ascend = None
 
-    def __init__ (self, peroba_db): # not split between global and local yet;
+    def __init__ (self, peroba_db): # not split between global and local yet; peroba_db = [metadata, sequences, tree, unaligned]
         self.g_csv = peroba_db[0]  # formatted metadata
         self.g_seq = {x.id:x for x in peroba_db[1]} # dictionary
         self.trees = [peroba_db[2]]  ## trees is a list; peroba_db[2] is treeswift already (assuming no dup names)
@@ -125,7 +125,9 @@ class PerobaBackbone:
         # if duplicates with both long and short names, by now both have long name
         logger.info("Checking sequences where both short- and long-named versions were input (by now all these have long version)")
         sequence, l_qual = common.remove_duplicated_sequences (sequence) # return a dict of seqs and one of qualities 
-        if self.unaligned is not None and len(seqs_in_global) > 0:
+        # self.unaligned has unaligned global sequences, and is used only if user doesn't trust global seqs (and wants
+        # to check back). In which case we must neglect the current aligned and align it again 
+        if self.unaligned is not None and len(seqs_in_global) > 0: 
             logger.info("Replacing local and global sequences by one with better quality (more non-N bases)")
             self.unaligned, sequence, to_replace = common.sequence_dict_pair_with_better_quality (self.unaligned, sequence, q2=l_qual, matched=seqs_in_global)
             for seqname in to_replace[1]: # list of local seq names with better quality
@@ -184,6 +186,8 @@ class PerobaBackbone:
     def sort_categories (self):
         df = self.g_csv.copy()
         pref = [x for x in prefsort if x[0] in df.columns] # sort only existing columns
+        if extended_mode > 0: # not UK sequences; thus do not favour/sort geographically
+            pref = [x for x in pref if x not in favourite_cats.values()] # exclude uk centric preferences
         self.sort_cols = [x[0] for x in pref] # follow this order (thus can't use dict...)
         self.sort_ascend = [x[1] for x in pref] # same order as sort_cols
         logger.info("Ordering metadata after categorisation") 
@@ -199,11 +203,13 @@ class PerobaBackbone:
             if col in df.columns:
                 df[col].fillna ("", inplace = True) 
 
-        for col,favs in favourite_cats.items():
-            if col in df.columns:
-                values = [x for x in df[col].unique() if x not in favs + [""]] 
-                values = favs + values  + [""] # make sure favs are first in list, and empty are last
-                df[col] = pd.Categorical(df[col], categories = values, ordered=True)
+        if extended_mode is 0: # favourite categories are NORW-centric 
+            for col,favs in favourite_cats.items():
+                if col in df.columns:
+                    values = [x for x in df[col].unique() if x not in favs + [""]] 
+                    values = favs + values  + [""] # make sure favs are first in list, and empty are last
+                    df[col] = pd.Categorical(df[col], categories = values, ordered=True)
+
         df = df.sort_values(by=self.sort_cols, ascending=self.sort_ascend)
         self.g_csv = df
 
@@ -321,23 +327,30 @@ class PerobaBackbone:
     def reduce_redundancy (self, clade_rule = None):
         if clade_rule is None: # for each lineage level with at least x[0] samples, keep at most x[1]
             clade_rule = [ # rules can be repeated, for different thresholds; some samples fall into several 
-                    ["lineage",   10, 20], # only those with >1 samples; then take up to 10
-                    ["lineage",   20, 500], # only those with >20 samples; then take up to 500 
+                    ["lineage",   10, 50], # only those with >1 samples; then take up to 50
+                    ["lineage",   40, 1000], # only those with >20 samples; then take up to 1000 
                     ["adm1",      10, 200],
                     ["adm2",       5, 100],
-                    ["uk_lineage", 2, 20], 
+                    ["uk_lineage", 4, 20], 
                     ["uk_lineage",20, 500], 
-                    ["phylotype",  2, 20],
-                    ["acc_lineage", 2, 10],
-                    ["del_lineage", 2, 10]
+                    ["phylotype",  4, 20],
+                    ["acc_lineage", 1, 10],
+                    ["del_lineage", 1, 10]
                     ]
         missing_rule = [ ## for samples without this information, we keep the top ones 
                 ["lineage",    50], 
-                ["uk_lineage", 200], 
-                ["phylotype",  400], 
-                ["acc_lineage", 500], 
-                ["del_lineage", 500]
+                ["uk_lineage", 500], 
+                ["phylotype",  500], 
+                ["acc_lineage", 1000], 
+                ["del_lineage", 1000]
                 ]
+        if extended_mode is 1: # more permissive since many non-UK sequences don't have this info
+            clade_rule = [[x[0], int(x[1]/2), 4 * x[2]] for x in clade_rule] # zero is fine 
+            missing_rule = [[x[0], 16 * x[1]] for x in missing_rule]
+        if extended_mode is 2: # more permissive since many non-UK sequences don't have this info
+            clade_rule = [[x[0], int(x[1]/2), 8 * x[2]] for x in clade_rule] # zero is fine 
+            missing_rule = [[x[0], 32 * x[1]] for x in missing_rule]
+
         df = self.g_csv
         logger.info("Subsampling redundant global samples (i.e. those fom same lineage etc.)") 
         df = df.sort_values(by=self.sort_cols, ascending=self.sort_ascend)
@@ -360,7 +373,7 @@ class PerobaBackbone:
         logger.info("After subsampling, global metadata has %s samples", self.g_csv.shape[0])
         self.g_seq, self.g_snp, self.trees = self.remove_seq_tree_based_on_metadata()
 
-    def remove_low_quality (self, g_acgt = 0.8, l_acgt = 0.5, g_n = 0.05, l_n = 0.3):
+    def remove_low_quality (self, g_acgt = 0.75, l_acgt = 0.5, g_n = 0.1, l_n = 0.3):
         logger.info(f"Remove global sequences with proportion of ACGT less than  {g_acgt} or proportion of N higher than {g_n}")
         self.g_csv = self.g_csv.loc[ (self.g_csv["peroba_freq_acgt"] > g_acgt) & (self.g_csv["peroba_freq_n"] < g_n) ]
         self.g_seq, self.g_snp, self.trees = self.remove_seq_tree_based_on_metadata()
@@ -397,7 +410,10 @@ class PerobaBackbone:
         if len(query) < 1: 
             logger.info("Skip alignment mapping since all local sequences already have uk_lineage")
             return []
-        target = self.g_csv.loc[(self.g_csv["uk_lineage"] != ""),"sequence_name"].tolist()
+        if extended_mode > 0: # any sample with a global lineage
+            target = self.g_csv.loc[(self.g_csv["lineage"] != ""),"sequence_name"].tolist()
+        else: # only samples with a uk_lineage
+            target = self.g_csv.loc[(self.g_csv["uk_lineage"] != ""),"sequence_name"].tolist()
         if exclude is not None:
             target = [x for x in target if x not in exclude]
         l_seq = {x:self.l_snp[x] for x in query}  # only local sequences still without uk_lineage
@@ -413,8 +429,15 @@ class PerobaBackbone:
         return neighbours
 
     def find_neighbours (self):
-        n1 = self.find_neighbours_ball() 
-        n2 = self.find_neighbours_paf(exclude=n1) 
+        if extended_mode is 2:
+            n1 = self.find_neighbours_ball(blocks = 1000, leaf_size = 400, dist_blocks = 6, nn = 20) 
+            n2 = self.find_neighbours_paf (blocks = 2000, leaf_size = 500, n_segments = 2, nn = 30, exclude = n1) 
+        elif extended_mode is 1:
+            n1 = self.find_neighbours_ball(blocks = 2000, leaf_size = 400, dist_blocks = 4, nn = 20) 
+            n2 = self.find_neighbours_paf (blocks = 3000, leaf_size = 500, n_segments = 1, nn = 20, exclude = n1) 
+        else: ## local (COGUK) mode
+            n1 = self.find_neighbours_ball(blocks = 1500, leaf_size = 400, dist_blocks = 3, nn = 5) 
+            n2 = self.find_neighbours_paf (blocks = 2000, leaf_size = 500, n_segments = 1, nn = 10, exclude = n1) 
         return list(set(n1 + n2))
 
 def save_global_from_seqnames (bb, seqnames, prefix):
@@ -518,10 +541,13 @@ def read_peroba_database (f_prefix, trust_global_sequences = False):
     sequences = common.read_fasta (fname, check_name = False)
 
     unaligned = []
-    if not trust_global_sequences:
+    if trust_global_sequences:
+        logger.info(f"Will assume global sequences are 'better' than local when duplicates exist")
+    else: 
         fname = f_prefix + common.suffix["sequences"]
         logger.info(f"Reading database unaligned sequences from \'{fname}\'")
         unaligned = common.read_fasta (fname, check_name = False)
+    
 
     logger.info("Finished loading the database; dataframe has dimensions %s and it's assumed we have the same number of sequences; the tree may be smaller", metadata.shape)
     return [metadata, sequences, tree, unaligned]
@@ -610,15 +636,17 @@ def main():
 
     parser.add_argument('perobaDB')
     parser.add_argument('-d', '--debug', action="store_const", dest="loglevel", const=logging.DEBUG, default=logging.WARNING,
-            help="Print debugging statements")
+        help="Print debugging statements")
     parser.add_argument('-v', '--verbose', action="store_const", dest="loglevel", const=logging.INFO, help="Add verbosity")
     parser.add_argument('-i', '--input', action="store", help="Directory where perobaDB files are. Default: working directory")
     parser.add_argument('-c', '--csv', metavar='csv', help="csv table with metadata from NORW")
     parser.add_argument('-s', '--sequences', metavar='fasta', nargs='+', help="extra files with local sequences (from NORW)")
     parser.add_argument('-t', '--trees', metavar='', help="file with (user-defined) trees in newick format to help produce backbone")
     parser.add_argument('-o', '--output', action="store", help="Output database directory. Default: working directory")
+    parser.add_argument('-g', '--global_level', metavar='[0,1,2]', type=int, default=0, 
+        help="how broad the search should be (default=0 wich means local (COGUK) new samples only)")
     parser.add_argument('-r', '--trust', default=False, action='store_true', 
-            help="Trust global sequences, skipping quality comparison for matches")
+        help="Trust global sequences, skipping quality comparison for matches")
 
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel)
@@ -631,6 +659,15 @@ def main():
 
     if args.input: input_d = os.path.join(current_working_dir, args.input)
     else: input_d = current_working_dir
+
+    extended_mode = args.global_level
+    if extended_mode is 0:
+        logger.info("Assuming all sequences are from NORW/COGUK (subsampling will be UK-centric)")
+    elif extended_mode is 1:
+        logger.info("Extended (global) mode: will use more GISAID data, with settings similar to the classic (COGUK) search")
+    else:
+        extended_mode = 2
+        logger.info("Extended (global) mode: will use more GISAID data and perform a broader search")
 
     logger.info("Reading metadata, sequences, and tree from peroba_database")
     database = read_peroba_database (os.path.join(input_d, args.perobaDB), args.trust) # something like "my_folder/perobaDB.0515"

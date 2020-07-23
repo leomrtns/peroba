@@ -100,9 +100,9 @@ def read_ete_treefile (treefile, multi = None):
 
 def read_fasta (filename, fragment_size = 0, check_name = False):
     unaligned = []
-    if   "bz2" in filename[-5:]: this_open = bz2.open
-    elif "gz"  in filename[-5:]: this_open = gzip.open
-    elif "xz"  in filename[-5:]: this_open = lzma.open
+    if filename.endswith(".bz2"): this_open = bz2.open #if "bz2" in filename[-5:]: this_open = bz2.open
+    if filename.endswith(".gz"):  this_open = gzip.open
+    if filename.endswith(".xz"):  this_open = lzma.open
     else:  this_open = open
     with this_open(filename, "rt") as handle:
         for record in SeqIO.parse(handle, "fasta"):
@@ -455,9 +455,9 @@ def save_sequence_dict_to_file (seqs, fname=None, use_seq_id = False):
     if fname is None: fname = "tmp." + '%012x' % random.randrange(16**12) + ".aln.xz"
     logger.info(f"Saving sequences to file {fname}")
     mode = "wb"
-    if   "bz2" in fname[-5:]: this_open = bz2.open
-    elif "gz"  in fname[-5:]: this_open = gzip.open
-    elif "xz"  in fname[-5:]: this_open = lzma.open
+    if fname.endswith(".bz2"): this_open = bz2.open #if "bz2" in filename[-5:]: this_open = bz2.open
+    if fname.endswith(".gz"):  this_open = gzip.open
+    if fname.endswith(".xz"):  this_open = lzma.open
     else:  
         this_open = open
         mode = "w"
