@@ -305,7 +305,7 @@ The **locality** allows us to focus on the local scale, by "zooming in" into geo
     df = pd.DataFrame(yesno.astype(str), columns=["local"], index=metadata.index.copy())
     print (df)
     #print ("DEBUG::yesno and local:: ",collections.Counter(yesnoTMP.astype(str)), collections.Counter(yesno.astype(str)), collections.Counter(df["local"]))
-    print ("DEBUG::yesno and local:: ",yesnoTMP.__dict__.keys(), yesno__dict__.keys(), collections.Counter(df["local"]))
+    print ("DEBUG::yesno and local:: ",yesnoTMP.__dict__.keys(), yesno.__dict__.keys(), collections.Counter(df["local"]))
     x = get_binary_trait_subtrees (tree, df, trait_column = "local", trait_value = "True", elements = 1,
             method=method[0], extended_mode = extended_mode)
     subtree, mono, result, trait_name = x  # most important is subtree
