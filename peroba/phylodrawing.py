@@ -108,7 +108,7 @@ def get_binary_trait_subtrees (tre, csv,  tiplabel_in_csv = None, elements = 1,
                 stored_leaves.update (node2leaves[xnode]) # update() is append() for sets ;)
                 subtrees.append(xnode)
     else:
-	print ("DEBUG:: going deeper")
+        print ("DEBUG:: going deeper")
         matches = filter(lambda n: "yes" in getattr(n,new_trait) and len(getattr(n,new_trait)) <= (elements+1), tre.traverse("preorder"))
         for xnode in matches:
 	    print ("DEBUG:: match found")
