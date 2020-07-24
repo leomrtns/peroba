@@ -33,9 +33,12 @@ def md_html_table (df):
     dfc = df[cols]
     return "\n\n" + dfc.to_markdown(tablefmt="pipe") + "\n\n"
 
-def plot_over_clusters (metadata, tree, min_cluster_size = None, output_dir=None, figdir=None, pdf_report_name = None):
+def plot_over_clusters (metadata, tree, output_dir=None, figdir=None, pdf_report_name = None, extended_mode = 0):
     if output_dir is None: output_dir = cwd
-    if min_cluster_size is None: min_cluster_size = 5
+    if extended_mode == 0: min_cluster_size = 5
+    elif extended_mode == 1: min_cluster_size = 3
+    else: min_cluster_size = 1
+
     df = metadata.copy()
 
     md_description = """
@@ -52,7 +55,7 @@ for instance) but our method will impute a lineage/phylotype to it nonetheless.
     html_desc = pdf_desc = md_description 
 
     # df will be metadata with extra peroba_ columns (and sub_df is for each subtree)
-    sub_df, sub_tree, md_description, df = phylo.ASR_subtrees (df, tree)
+    sub_df, sub_tree, md_description, df = phylo.ASR_subtrees (df, tree, extended_mode = extended_mode)
     html_desc += md_description # same text in markdown
     pdf_desc  += md_description
 
@@ -75,11 +78,13 @@ for instance) but our method will impute a lineage/phylotype to it nonetheless.
             hdesc, pdesc = stdraw.plot_bubble_per_cluster (c, i, output_dir, figdir)
             html_desc += hdesc; pdf_desc += pdesc
             
-            hdesc, pdesc = stdraw.plot_time_heatmap (c, i, output_dir, figdir)
-            html_desc += hdesc; pdf_desc += pdesc
+            if extended_mode < 2:
+                hdesc, pdesc = stdraw.plot_time_heatmap (c, i, output_dir, figdir)
+                html_desc += hdesc; pdf_desc += pdesc
             
-            hdesc, pdesc = stdraw.plot_postcode_map (c, i, output_dir, figdir)
-            html_desc += hdesc; pdf_desc += pdesc
+            if extended_mode == 0:
+                hdesc, pdesc = stdraw.plot_postcode_map (c, i, output_dir, figdir)
+                html_desc += hdesc; pdf_desc += pdesc
 
     html_desc +=f"""
 ## Files for download
@@ -240,7 +245,7 @@ geometry:
     #\blscape 
     return html_description, pdf_description
 
-def main_prepare_report_files (metadata0, csv0, tree, tree_leaves, input_dir, output_dir, title_date):
+def main_prepare_report_files (metadata0, csv0, tree, tree_leaves, input_dir, output_dir, title_date, extended_mode):
     # report files
     mkd_htm_file = os.path.join(output_dir,f"_htm_{title_date}.md")
     mkd_pdf_file = os.path.join(output_dir,f"_pdf_{title_date}.md")
@@ -264,8 +269,8 @@ def main_prepare_report_files (metadata0, csv0, tree, tree_leaves, input_dir, ou
     ## prepare data (merging, renaming) csv0 will be modified to remove columns from prev week
     metadata, csv, tree, tree_leaves = merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves)
     ## start plotting (metadata will receive peroba_ imputed values) 
-    html_desc, pdf_desc, metadata = plot_over_clusters (metadata, tree, min_cluster_size = 5, output_dir=output_dir, 
-            figdir=figdir, pdf_report_name = pdfreportname)
+    html_desc, pdf_desc, metadata = plot_over_clusters (metadata, tree, output_dir=output_dir, 
+            figdir=figdir, pdf_report_name = pdfreportname, extended_mode=extended_mode)
     fw_htm.write(html_desc)
     fw_pdf.write(pdf_desc)
 
@@ -320,6 +325,8 @@ def main():
     parser.add_argument('-p', '--prefix', action="store", help="Date to be added to report")
     parser.add_argument('-i', '--input', action="store", help="Input directory with pandoc templates, if not using default")
     parser.add_argument('-o', '--output', action="store", help="Output database directory. Default: working directory")
+    parser.add_argument('-g', '--global_level', metavar='[0,1,2]', type=int, default=0, 
+        help="how broad ---zoomed out--- the tree should be (default=0 wich means local (COGUK) new samples only)")
 
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel)
@@ -335,6 +342,15 @@ def main():
     if args.prefix: title_date = args.prefix
     else: title_date = datetime.datetime.now().strftime("%Y-%m-%d") 
 
+    if args.global_level == 0:
+        logger.info("Plots will be zoomed in")
+    elif args.global_level == 1:
+        logger.info("Plots will be a bit zoomed out")
+    else:
+        args.global_level = 2
+        logger.info("Plots will be zoomed out")
+
+
     logger.info("Reading metadata (previously prepared by peroba)")
     metadata = common.df_read_genome_metadata (args.metadata, index_name = "peroba_seq_uid")
     logger.info("Reading CSV file with metadata from NORW")
@@ -349,7 +365,7 @@ def main():
         logger.warning("Found duplicated leaf names in input treefile, will keep one at random")
     logger.info("%s leaves in treefile and metadata with shape %s", len(tree_leaves), str(metadata.shape))
 
-    main_prepare_report_files (metadata, csv, tree, tree_leaves, input_d, output_d, title_date)
+    main_prepare_report_files (metadata, csv, tree, tree_leaves, input_d, output_d, title_date, args.global_level)
 
 if __name__ == '__main__':
     main()

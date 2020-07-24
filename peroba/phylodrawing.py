@@ -63,13 +63,14 @@ def get_ancestral_trait_subtrees (tre, csv, tiplabel_in_csv = None, elements = 1
     return subtrees, mono, result
 
 def get_binary_trait_subtrees (tre, csv,  tiplabel_in_csv = None, elements = 1, 
-          trait_column ="adm2", trait_value = "NORFOLK", n_threads = 4, method = "DOWNPASS"):
+          trait_column ="adm2", trait_value = "NORFOLK", n_threads = 4, method = "DOWNPASS", extended_mode=0):
     '''
     Instead of reconstructing all states, we ask if ancestral state is value or not. Still we allow for `elements` > 1
     (2 in practice), so that we accept "yes and no" ancestral nodes. 
     You can group trait values into a list 
     '''
     if elements < 1: elements = 1 ## inferred state cardinality (1 makes much more sense, but you can set "2" as well)
+    if extended_mode > 0: elements = 2
     if method not in ["MPPA", "MAP", "JOINT", "ACCTRAN", "DELTRAN", "DOWNPASS"]:
         method = "DOWNPASS"
     if tiplabel_in_csv: # o.w. we assume input csv already has it
@@ -101,10 +102,16 @@ def get_binary_trait_subtrees (tre, csv,  tiplabel_in_csv = None, elements = 1,
     subtrees = [] # list of non-overlapping nodes
     node2leaves = tre.get_cached_content(store_attr="name") # set() of leaves below every node; store leaf name only
     for xnode in matches:
-      if not bool (stored_leaves & node2leaves[xnode]): # both are sets; bool is just to be verbose
-          stored_leaves.update (node2leaves[xnode]) # update() is append() for sets ;)
-          subtrees.append(xnode)
+        if not bool (stored_leaves & node2leaves[xnode]): # both are sets; bool is just to be verbose
+            stored_leaves.update (node2leaves[xnode]) # update() is append() for sets ;)
+            if extended_mode == 0:
+                subtrees.append(xnode)
+            elif extended_mode == 1:
+                subtrees.append(xnode.up)
+            else:
+                subtrees.append(xnode.up.up)
     mono = tre.get_monophyletic (values = "yes", target_attr = new_trait) # from ete3 
+    subtrees = list(set(subtrees)) ## for cases where node->up are the same
     return subtrees, mono, result, new_trait
 
 def colormap_from_dataframe_old (df, column_list, column_names, cmap_list = None):
@@ -249,16 +256,14 @@ def return_treestyle_with_columns (cmapvector):
         ts.aligned_header.add_face(labelFace, 2 * col + 1)
     return ts
 
-def ASR_subtrees (metadata0, tree, reroot = True, method = None):
+def ASR_subtrees (metadata0, tree, extended_mode = 0, reroot = True, method = None):
     """ ancestral state reconstruction assuming binary or not. Clusters are based on "locality": patient is from Norfolk
-    *or* was sequenced here in NORW.
-    One column at a time, so the n_threads doesn't help.
+    *or* was sequenced here in NORW. One column at a time, so the n_threads doesn't help.
     """
     if method is None: method = ["DOWNPASS", "ACCTRAN"]
     if isinstance (method, str): method = [method, method]
 
     metadata = metadata0.copy()  # work with copies
-    #metadata["uk_lineage"] = metadata["uk_lineage"].replace("x", np.nan, regex=True)  ## old database (before 05.22) made this silly substitution
     csv_cols = [x for x in common.asr_cols if x in metadata.columns]
     if reroot: ## this should be A,B 
         R = tree.get_midpoint_outgroup()
@@ -274,11 +279,16 @@ lineages, and we may also see samples from the same lineage scattered across clu
 The **locality** allows us to focus on the local scale, by "zooming in" into geographycally connected lineages.
 <br>
     """
+    if extended_mode == 0:
+        yesno = (metadata["adm2"].str.contains("Norfolk", case=False)) | (metadata["submission_org_code"].str.contains("NORW", case=False))
+    else:   
+        md_description="Extended mode of **peroba**, for non-COGUK analyses<br><br>"
+        yesno = metadata["submission_org_code"].str.contains("NORW", case=False)
+
     logger.info("Start estimating ancestral states by %s for locality and %s for others", method[0], method[1])
-    ## subtrees will be defined by 'locality'
-    yesno = (metadata["adm2"].str.contains("Norfolk", case=False)) | (metadata["submission_org_code"].str.contains("NORW", case=False))
     df = pd.DataFrame(yesno.astype(str), columns=["local"], index=metadata.index.copy())
-    x = get_binary_trait_subtrees (tree, df, trait_column = "local", trait_value = "True", elements = 1, method=method[0])
+    x = get_binary_trait_subtrees (tree, df, trait_column = "local", trait_value = "True", elements = 1,
+            method=method[0], extended_mode = extended_mode)
     subtree, mono, result, trait_name = x  # most important is subtree
     logger.info("Finished estimating ancestral state for 'locality', which defines clusters")
     
