@@ -111,12 +111,12 @@ def get_binary_trait_subtrees (tre, csv,  tiplabel_in_csv = None, elements = 1,
         print ("DEBUG:: going deeper")
         matches = filter(lambda n: "yes" in getattr(n,new_trait) and len(getattr(n,new_trait)) <= (elements+1), tre.traverse("preorder"))
         for xnode in matches:
-	    print ("DEBUG:: match found")
+            print ("DEBUG:: match found")
             if not bool (stored_leaves & node2leaves[xnode]): # both are sets; bool is just to be verbose
                 stored_leaves.update (node2leaves[xnode]) # update() is append() for sets ;)
                 if extended_mode == 2 and xnode.up.up is not None:
                     subtrees.append(xnode.up.up)
-	            print ("DEBUG:: up up")
+                    print ("DEBUG:: up up")
                 elif xnode.up is not None: # extended_mode 1 or 2
                     subtrees.append(xnode.up)
                 else:
