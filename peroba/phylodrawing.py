@@ -83,7 +83,6 @@ def get_binary_trait_subtrees (tre, csv,  tiplabel_in_csv = None, elements = 1,
     # transform variable into binary
     new_trait = str(trait_column) + "_is_" + "_or_".join(trait_value)
     csv_column[new_trait] = csv_column[trait_column].map(lambda a: "yes" if a in trait_value else "no")
-    print ("DEBUG::newcol:: ", collections.Counter(csv_column[new_trait]))
     tree_leaf_nodes = {leaf:leaf.name for leaf in tre.iter_leaves()} # node:leafname, not the other way around as usual...
 
     csv_column.drop(labels = [trait_column], axis=1, inplace = True)
@@ -108,15 +107,12 @@ def get_binary_trait_subtrees (tre, csv,  tiplabel_in_csv = None, elements = 1,
                 stored_leaves.update (node2leaves[xnode]) # update() is append() for sets ;)
                 subtrees.append(xnode)
     else:
-        print ("DEBUG:: going deeper")
         matches = filter(lambda n: "yes" in getattr(n,new_trait) and len(getattr(n,new_trait)) <= (elements+1), tre.traverse("preorder"))
         for xnode in matches:
-            print ("DEBUG:: match found")
             if not bool (stored_leaves & node2leaves[xnode]): # both are sets; bool is just to be verbose
                 stored_leaves.update (node2leaves[xnode]) # update() is append() for sets ;)
                 if extended_mode == 2 and xnode.up.up is not None:
                     subtrees.append(xnode.up.up)
-                    print ("DEBUG:: up up")
                 elif xnode.up is not None: # extended_mode 1 or 2
                     subtrees.append(xnode.up)
                 else:
@@ -300,7 +296,6 @@ The **locality** allows us to focus on the local scale, by "zooming in" into geo
 
     logger.info("Start estimating ancestral states by %s for locality and %s for others", method[0], method[1])
     df = pd.DataFrame(list(yesno.astype(str)), columns=["local"], index=metadata.index.copy())
-    print ("DEBUG::yesno and local:: ", collections.Counter(yesno.astype(str)), collections.Counter(df["local"]))
     x = get_binary_trait_subtrees (tree, df, trait_column = "local", trait_value = "True", elements = 1,
             method=method[0], extended_mode = extended_mode)
     subtree, mono, result, trait_name = x  # most important is subtree
