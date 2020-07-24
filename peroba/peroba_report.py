@@ -67,7 +67,7 @@ for instance) but our method will impute a lineage/phylotype to it nonetheless.
     for i,(c,t) in enumerate(zip(sub_df,sub_tree)):
         if len(c) > min_cluster_size:
             c = remove_imputation_from_gisaid (c) # remove imputations where it doens't make sense (uk_lineage from China)
-            md_description = f"\n### Cluster {i}\n"
+            md_description = f"\n\n### Cluster {i}\n\n"
             html_desc += md_description
             pdf_desc  += md_description
             html_desc += md_html_table (c)
