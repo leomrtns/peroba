@@ -355,8 +355,8 @@ def plot_bubble_per_cluster (metadata, counter, output_dir, figdir):
     df = df.groupby(["collection_date","adm2"]).size().to_frame(name="size")
     df = df.reset_index() # collection and adm2 are indices of series (that we transformed into frame)
     if len(df["adm2"].unique()) == 0  or len(df["collection_date"].unique()) == 0:
-         logger.warning("\ntoo few samples with information for bubble plot<br>\n") ## not all samples have collection_date, for instance
-         return "\n", "\n"  # also happens for global (extended_mode) reports
+         desc = "\ntoo few samples with information for bubble plot<br>\n" ## not all samples have collection_date, for instance
+         return desc, desc  # also happens for global (extended_mode) reports
     ratio = len(df["adm2"].unique())/len(df["collection_date"].unique())
     if ratio > 4: ratio = 4
     if ratio < 0.25: ratio = 0.25
