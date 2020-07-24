@@ -107,9 +107,18 @@ def get_binary_trait_subtrees (tre, csv,  tiplabel_in_csv = None, elements = 1,
             if extended_mode == 0:
                 subtrees.append(xnode)
             elif extended_mode == 1:
-                subtrees.append(xnode.up)
+                if xnode.up is not None:
+                    subtrees.append(xnode.up)
+                else:
+                    subtrees.append(xnode)
             else:
-                subtrees.append(xnode.up.up)
+                if xnode.up.up is not None:
+                    subtrees.append(xnode.up.up)
+                elif xnode.up is not None:
+                    subtrees.append(xnode.up)
+                else:
+                    subtrees.append(xnode)
+
     mono = tre.get_monophyletic (values = "yes", target_attr = new_trait) # from ete3 
     subtrees = list(set(subtrees)) ## for cases where node->up are the same
     return subtrees, mono, result, new_trait
