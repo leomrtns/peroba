@@ -296,9 +296,7 @@ The **locality** allows us to focus on the local scale, by "zooming in" into geo
                 | (metadata["submission_org_code"].str.contains("NORW", case=False, na=False)))
     else:   
         md_description = "Extended mode of **peroba**, for non-COGUK analyses<br><br>"
-        yesno = ( (metadata["adm2"].str.contains("Norfolk", case=False, na=False))
-                | (metadata["submission_org_code"].str.contains("NORW", case=False, na=False)))
-        #yesno = metadata["submission_org_code"].str.contains("NORW", case=False, na=False)
+        yesno = (metadata["submission_org_code"].str.contains("NORW", case=False, na=False))
 
     logger.info("Start estimating ancestral states by %s for locality and %s for others", method[0], method[1])
     df = pd.DataFrame(yesno.astype(str), columns=["local"], index=metadata.index.copy())
