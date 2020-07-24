@@ -70,7 +70,6 @@ def get_binary_trait_subtrees (tre, csv,  tiplabel_in_csv = None, elements = 1,
     You can group trait values into a list 
     '''
     if elements < 1: elements = 1 ## inferred state cardinality (1 makes much more sense, but you can set "2" as well)
-    if extended_mode > 0: elements = 2
     if method not in ["MPPA", "MAP", "JOINT", "ACCTRAN", "DELTRAN", "DOWNPASS"]:
         method = "DOWNPASS"
     if tiplabel_in_csv: # o.w. we assume input csv already has it
@@ -89,9 +88,6 @@ def get_binary_trait_subtrees (tre, csv,  tiplabel_in_csv = None, elements = 1,
     csv_column.drop(labels = [trait_column], axis=1, inplace = True)
     ## Ancestral state reconstruction of given trait
     result = acr (tre, csv_column, prediction_method = method, force_joint=False, threads=n_threads) ## annotates tree nodes with states (e.g. tre2.adm2)
-    ## Find all internal nodes where trait_value is possible state (b/c is seen at tips below)
-    matches = filter(lambda n: not n.is_leaf() and "yes" in getattr(n,new_trait) and # traits are sets (not lists)
-            len(getattr(n,new_trait)) <= elements, tre.traverse("preorder"))
     
     for leafnode, leafname  in tree_leaf_nodes.items(): # our tree may have dups, and pastml (correctly) replaces them by a placeholder "t123" 
         leafnode.name = leafname  # here we revert back to duplicate names (dictionary keys are nodes, and values are original names 
@@ -101,20 +97,23 @@ def get_binary_trait_subtrees (tre, csv,  tiplabel_in_csv = None, elements = 1,
     stored_leaves = set () # set of leaf names (created with get_cached_content)
     subtrees = [] # list of non-overlapping nodes
     node2leaves = tre.get_cached_content(store_attr="name") # set() of leaves below every node; store leaf name only
-    for xnode in matches:
-        if not bool (stored_leaves & node2leaves[xnode]): # both are sets; bool is just to be verbose
-            stored_leaves.update (node2leaves[xnode]) # update() is append() for sets ;)
-            if extended_mode == 0:
+    
+    if extended_mode == 0:
+        ## Find all internal nodes where trait_value is possible state (b/c is seen at tips below)
+        matches = filter(lambda n: not n.is_leaf() and "yes" in getattr(n,new_trait) and # traits are sets (not lists)
+            len(getattr(n,new_trait)) <= elements, tre.traverse("preorder"))
+        for xnode in matches:
+            if not bool (stored_leaves & node2leaves[xnode]): # both are sets; bool is just to be verbose
+                stored_leaves.update (node2leaves[xnode]) # update() is append() for sets ;)
                 subtrees.append(xnode)
-            elif extended_mode == 1:
-                if xnode.up is not None:
-                    subtrees.append(xnode.up)
-                else:
-                    subtrees.append(xnode)
-            else:
-                if xnode.up.up is not None:
+    else:
+        matches = filter(lambda n: "yes" in getattr(n,new_trait) and len(getattr(n,new_trait)) <= (elements+1), tre.traverse("preorder"))
+        for xnode in matches:
+            if not bool (stored_leaves & node2leaves[xnode]): # both are sets; bool is just to be verbose
+                stored_leaves.update (node2leaves[xnode]) # update() is append() for sets ;)
+                if extended_mode == 2 and xnode.up.up is not None:
                     subtrees.append(xnode.up.up)
-                elif xnode.up is not None:
+                elif xnode.up is not None: # extended_mode 1 or 2
                     subtrees.append(xnode.up)
                 else:
                     subtrees.append(xnode)
@@ -225,10 +224,10 @@ def return_treestyle_with_columns (cmapvector):
     ns1["hz_line_color"] = ns1["vt_line_color"] = "darkred"
     def tree_profile_layout (node):# prepare table and other node information (local function so mind the identation) 
         if "NORW" in (getattr(node, "submission_org_code")):  this_color = "darkred"
-        else:     this_color = "#050505"
+        else:     this_color = "#080816"
 
         node.img_style['hz_line_type']  = node.img_style['vt_line_type'] = 0 # 0=solid, 1=dashed, 2=dotted
-        node.img_style['hz_line_width'] = node.img_style['vt_line_width'] = 3 
+        node.img_style['hz_line_width'] = node.img_style['vt_line_width'] = 4 
         node.img_style['hz_line_color'] = node.img_style['vt_line_color'] = this_color
 
         if node.is_leaf(): # the aligned leaf is "column 0", thus traits go to column+1
