@@ -319,17 +319,18 @@ The **locality** allows us to focus on the local scale, by "zooming in" into geo
 
     return submetadata, subtree, md_description, metadata  ## metadata now has tip reconstruction
 
-def prepare_csv_columns_for_asr (csv, csv_cols=None):
+def prepare_csv_columns_for_asr (csv, csv_cols=None): 
     if csv_cols is None:  csv_cols = common.asr_cols # csv_cols = estimate tips, add "peroba_" to name and export
     csv_cols = [x for x in csv_cols if x in csv.columns]
-    csv = csv[csv_cols] 
+    csv.loc[~csv["submission_org_code"].str.contains("NORW", na=False), "date_sequenced"] = "nil" # only for NORW
 
-    for col in csv_cols:
+    for col in csv_cols: 
         csv[col].fillna("", inplace=True) ## to estimate tip values
         csv[col] = csv[col].astype(str)
 
+    csv = csv[csv_cols + ["submission_org_code"]];
     logger.info ("Follow-up columns found in CSV: %s", " ".join(csv_cols))
-    return csv, csv_cols
+    return csv[csv_cols], csv_cols
 
 def plot_single_cluster (csv, tree, counter, ts = None, output_dir=None, figdir=None):
     if output_dir is None: output_dir = cwd
@@ -338,7 +339,7 @@ def plot_single_cluster (csv, tree, counter, ts = None, output_dir=None, figdir=
 
     df = csv.drop (labels = exclude, axis=1)
     df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-    caption = f"Tree of cluster {counter}, with red branches connecting samples sequenced in NORW."
+    caption = f"Tree of cluster {counter}, with red branches connecting local samples (sequenced in NORW)."
 
     fname = f"{figdir}/tree{counter}.pdf"
     tree.render(os.path.join(output_dir,fname), w=800, tree_style=ts)
