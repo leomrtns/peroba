@@ -60,7 +60,8 @@ for instance) but our method will impute a lineage/phylotype to it nonetheless.
     pdf_desc  += md_description
 
     logger.info("Decorating tree before plotting all clusters")
-    colmap_dict = phylo.colormap_from_dataframe (df)
+    df_clean = remove_imputation_from_gisaid (df) # remove imputations where it doens't make sense (uk_lineage from China)
+    colmap_dict = phylo.colormap_from_dataframe (df_clean)
     ts = phylo.return_treestyle_with_columns (colmap_dict)
 
     logger.info("Entering loop over clusters found; sit tight!")
