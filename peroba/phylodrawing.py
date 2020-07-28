@@ -301,12 +301,12 @@ The **locality** allows us to focus on the local scale, by "zooming in" into geo
     subtree, mono, result, trait_name = x  # most important is subtree
     logger.info("Finished estimating ancestral state for 'locality', which defines clusters")
     
-    ## decorate the tree with ancestral states
+    ## decorate the tree with ancestral states (csv informs which columns should be on tree as node attribute)
     csv, csv_cols = prepare_csv_columns_for_asr (metadata, csv_cols) # csv is used only in pastml (imputation go to tree)
     if (csv_cols):
         logger.info("Will now estimate ancestral states for %s", " ".join(csv_cols))
         tree_leaf_nodes = {leaf:leaf.name for leaf in tree.iter_leaves()} # in case we have duplicated names 
-        result = acr (tree, csv[csv_cols], prediction_method = method[1], force_joint=False) ## annotates tree nodes with states (e.g. tre2.adm2)
+        result = acr (tree, csv, prediction_method = method[1], force_joint=False) ## annotates tree nodes with states (e.g. tre2.adm2)
         for leafnode, leafname  in tree_leaf_nodes.items(): # pastml (correctly) replaces duplicated names by a placeholder like "t123" 
             leafnode.name = leafname  # reverts back to duplicate names 
     # adds new peroba_ columns with imputed and original values:
@@ -322,7 +322,8 @@ The **locality** allows us to focus on the local scale, by "zooming in" into geo
 def prepare_csv_columns_for_asr (csv, csv_cols=None): 
     if csv_cols is None:  csv_cols = common.asr_cols # csv_cols = estimate tips, add "peroba_" to name and export
     csv_cols = [x for x in csv_cols if x in csv.columns]
-    csv.loc[~csv["submission_org_code"].str.contains("NORW", na=False), "date_sequenced"] = "nil" # only for NORW
+    #csv.loc[~csv["submission_org_code"].str.contains("NORW", na=False), "submission_org_code"] = "nil" # only for NORW
+    csv["submission_org_code"].fillna("...", inplace=True) ## to avoid colouring in case PASTML would have inferred it to be NORW
 
     for col in csv_cols: 
         csv[col].fillna("", inplace=True) ## to estimate tip values
