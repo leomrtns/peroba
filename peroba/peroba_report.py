@@ -36,7 +36,7 @@ def md_html_table (df):
 def plot_over_clusters (metadata, tree, output_dir=None, figdir=None, pdf_report_name = None, extended_mode = 0):
     if output_dir is None: output_dir = cwd
     if extended_mode == 0: min_cluster_size = 5
-    elif extended_mode == 1: min_cluster_size = 3
+    elif extended_mode == 1: min_cluster_size = 2
     else: min_cluster_size = 1
 
     df = metadata.copy()
@@ -79,11 +79,10 @@ for instance) but our method will impute a lineage/phylotype to it nonetheless.
             hdesc, pdesc = stdraw.plot_bubble_per_cluster (c, i, output_dir, figdir)
             html_desc += hdesc; pdf_desc += pdesc
             
-            if extended_mode < 2:
+            if extended_mode == 0:
                 hdesc, pdesc = stdraw.plot_time_heatmap (c, i, output_dir, figdir)
                 html_desc += hdesc; pdf_desc += pdesc
             
-            if extended_mode == 0:
                 hdesc, pdesc = stdraw.plot_postcode_map (c, i, output_dir, figdir)
                 html_desc += hdesc; pdf_desc += pdesc
 
