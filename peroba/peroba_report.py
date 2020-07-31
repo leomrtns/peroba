@@ -280,13 +280,14 @@ def main_prepare_report_files (metadata0, csv0, tree, tree_leaves, input_dir, ou
     csv = merge_original_with_extra_cols (csv, metadata)
     csv.to_csv (csv_file_name)
 
-    html_desc, pdf_desc = stdraw.plot_jitter_lineages (metadata, output_dir, figdir)
-    fw_htm.write(html_desc)
-    fw_pdf.write(pdf_desc)
-    
-    html_desc, pdf_desc = stdraw.plot_genomes_sequenced_over_time (metadata, output_dir, figdir)
-    fw_htm.write(html_desc)
-    fw_pdf.write(pdf_desc)
+    if extended_mode == 0:
+        html_desc, pdf_desc = stdraw.plot_jitter_lineages (metadata, output_dir, figdir)
+        fw_htm.write(html_desc)
+        fw_pdf.write(pdf_desc)
+
+        html_desc, pdf_desc = stdraw.plot_genomes_sequenced_over_time (metadata, output_dir, figdir)
+        fw_htm.write(html_desc)
+        fw_pdf.write(pdf_desc)
 
     description = finalise_report ()
     fw_htm.write(description)
