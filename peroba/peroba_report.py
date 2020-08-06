@@ -65,8 +65,10 @@ for instance) but our method will impute a lineage/phylotype to it nonetheless.
     ts = phylo.return_treestyle_with_columns (colmap_dict)
 
     logger.info("Entering loop over clusters found; sit tight!")
+    n_clusters = len(sub_tree)
     for i,(c,t) in enumerate(zip(sub_df,sub_tree)):
         if len(c) > min_cluster_size:
+            logger.debug(f"Generating stats and figures for cluster {i} of {n_clusters}")
             c = remove_imputation_from_gisaid (c) # remove imputations where it doens't make sense (uk_lineage from China)
             md_description = f"\n\n### Cluster {i}\n\n"
             html_desc += md_description
