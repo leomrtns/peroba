@@ -166,7 +166,7 @@ class PerobaBackbone:
         else:
             logger.info("No new sequences to be updated or aligned")
 
-        if csv:
+        if csv is not None:
             cols = [x for x in self.cols if x in csv.columns]
             csv = csv[cols] # remove other columns
             # global sequences with a match 
