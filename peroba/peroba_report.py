@@ -36,8 +36,8 @@ def md_html_table (df):
 def plot_over_clusters (metadata, tree, output_dir=None, figdir=None, pdf_report_name = None, extended_mode = 0):
     if output_dir is None: output_dir = cwd
     if extended_mode == 0: min_cluster_size = 5
-    elif extended_mode == 1: min_cluster_size = 2
-    else: min_cluster_size = 1
+    elif extended_mode == 1: min_cluster_size = 1
+    else: min_cluster_size = 0
 
     df = metadata.copy()
 

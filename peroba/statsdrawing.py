@@ -28,7 +28,6 @@ seaborn_rc = {"figure.dpi":300, "font.size":8, "axes.titlesize":8,"axes.labelsiz
 uk_postcode_area_file = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/Districts") 
 uk_gadm_nuts2_file = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/gadm36_GBR_2") 
 
-
 def generate_time_heatmap (df0, date_col = None, group_col = None, use_max = True, label_interval = None):
     if date_col is None: date_col = "collection_date"
     if group_col is None: group_col = "peroba_uk_lineage"
