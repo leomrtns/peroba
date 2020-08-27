@@ -423,9 +423,13 @@ class PerobaBackbone:
         neighbours1 = ml.list_r_neighbours (g_seq, self.l_snp, blocks, leaf_size, dist_blocks)
        
         blocks = 2 * blocks; leaf_size = leaf_size/2
-        logger.info("Found %s neighbours; now will find their %s closest neighbours on %s segments", 
-                len(neighbours1), str(nn), str(blocks))
-        aln_d = {x:self.g_snp[x] for x in neighbours1} 
+        logger.info("Found %s neighbours; now will find %s closest neighbours to %s on %s segments", 
+                len(neighbours1), str(nn), "them" if len(neighbours1)>0 else "the queries", str(blocks))
+        if len(neighbours1) > 0:
+            aln_d = {x:self.g_snp[x] for x in neighbours1} 
+        else:
+            logger.warning ("No neighbours found within appropriate distance: using query sequences to find their nearest neighbours") 
+            aln_d = self.l_snp
         # search amongst all sequences, not only those with lineage info
         neighbours = ml.list_n_neighbours (self.g_snp, aln_d, blocks, leaf_size, nn)
         neighbours = list(set(neighbours + neighbours1))

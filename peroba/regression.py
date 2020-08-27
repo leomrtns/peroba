@@ -33,7 +33,6 @@ def list_duplicates (seq_dict, blocks = 4, leaf_size = 500, radius=0.00001):
 def list_r_neighbours (g_seq, l_seq, blocks = 1000, leaf_size = 500, dist_blocks = 1):
     g_aln = [x for x in g_seq.values()]
     l_aln = [x for x in l_seq.values()]
-    logger.info("DBG::Global = %s local = %s",str(len(g_aln)), str(len(l_an)))
     genome_size = len(g_aln[0].seq) ## only works for aligned sequences
     block_size = int(genome_size / blocks)
     if (block_size < 1): block_size = 1
@@ -44,10 +43,18 @@ def list_r_neighbours (g_seq, l_seq, blocks = 1000, leaf_size = 500, dist_blocks
     g_hash = [[xxhash.xxh32(str(g_aln[j].seq[i:i+block_size])).intdigest() for i in range(0,genome_size,block_size)] for j in range(len(g_aln))]
     btre = BallTree(np.array(g_hash), leaf_size=leaf_size, metric='hamming') # create a neighbours tree of global sequences
 
-    logger.info("And finding neighbours with distance smaller than {:.6f}".format(radius))
+    # hashed query sequences
     l_hash = [[xxhash.xxh32(str(l_aln[j].seq[i:i+block_size])).intdigest() for i in range(0,genome_size,block_size)] for j in range(len(l_aln))]
-    idx = btre.query_radius(l_hash, r=radius, return_distance=False) # gives global neighbours to each local sequence; return_distance is expensive
-    clusters = list(set([g_aln[j].id for x in idx for j in x])) # one-dimentional list of all global neighbours
+    clusters = []
+    n_iter = 0
+    while len(clusters) < 1 and n_iter < 6:
+        logger.info("Iter {5d}: trying to find neighbours with distance smaller than {:.6f}".format(n_iter, radius))
+        idx = btre.query_radius(l_hash, r=radius, return_distance=False) # gives global neighbours to each local sequence; return_distance is expensive
+        clusters = list(set([g_aln[j].id for x in idx for j in x])) # one-dimentional list of all global neighbours
+        radius = radius * 2; 
+        n_iter += 1;
+    if (len(cluster) < 1):
+        logger.warning ("Could not find neighours close enough;")
     del g_aln, g_hash, l_aln, l_hash, btre, idx
     return clusters
 
@@ -61,7 +68,7 @@ def list_n_neighbours (g_seq, l_seq, blocks = 1000, leaf_size = 200, nn = 10):
     g_hash = [[xxhash.xxh32(str(g_aln[j].seq[i:i+block_size])).intdigest() for i in range(0,genome_size,block_size)] for j in range(len(g_aln))]
     btre = BallTree(np.array(g_hash), leaf_size=leaf_size, metric='hamming') # create a neighbours tree of global sequences
 
-    logger.info("And finding %s closest neighbours",str(nn))
+    logger.info("And finding %s closest neighbours",str(nn)) 
     if (nn<2): logger.warning("Closest neighbour will be itself, if already on BallTree; useful only on two independent sets")
 
     l_hash = [[xxhash.xxh32(str(l_aln[j].seq[i:i+block_size])).intdigest() for i in range(0,genome_size,block_size)] for j in range(len(l_aln))]
