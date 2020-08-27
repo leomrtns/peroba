@@ -83,7 +83,7 @@ class PerobaDatabase:
             with this_open(fname, mode) as fw: 
                 for name, rec in self.sequences.items():
                     if rec:  ## missing/query sequences
-                        seq = str(rec.seq)
+                        seq = str(rec.seq).replace('.','N') # one damn sequence from GISAID has dots 
                         fw.write(str(f">{name}\n{seq}\n").encode())
                         rec.id = name ## make sure alignment will have same names
 

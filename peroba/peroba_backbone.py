@@ -57,6 +57,7 @@ class PerobaBackbone:
     unaligned = None # used only for replacing local seqs by global if these have higher quality
     usrtrees = None ## these are user-defined trees that we'll return enriched (minimal pruning)
     extended_mode = 0
+    fast_mode_seqs = False
     #usrseqs = dict() 
     # subset of columns from that may be useful (drop others)
     cols = ["sequence_name", "central_sample_id", "submission_org_code", "submission_org", "collection_datetime", 
@@ -73,7 +74,7 @@ class PerobaBackbone:
     sort_cols = None 
     sort_ascend = None
 
-    def __init__ (self, peroba_db, global_level): # not split between global and local yet; peroba_db = [metadata, sequences, tree, unaligned]
+    def __init__ (self, peroba_db, global_level, is_fast = False): # not split between global and local yet; peroba_db = [metadata, sequences, tree, unaligned]
         self.g_csv = peroba_db[0]  # formatted metadata
         self.g_seq = {x.id:x for x in peroba_db[1]} # dictionary
         self.trees = [peroba_db[2]]  ## trees is a list; peroba_db[2] is treeswift already (assuming no dup names)
@@ -84,6 +85,13 @@ class PerobaBackbone:
         self.g_csv = self.g_csv[cols] # remove other columns
         
         logger.info("Imported %s rows from database", str(self.g_csv.shape[0]))
+        self.fast_mode_seqs = is_fast;
+        if (self.fast_mode_seqs is True):
+            logger.info ("Fast mode: will update only sequences given as 'local'; NORW samples will be treated as regular COGUK ones")
+        else: 
+            self.fast_mode_seqs = False # anything other than True is False
+            logger.info ("Slow mode: will update all NORW sequences, treating them separately as other COGUK ones")
+
         self.extended_mode = global_level
         if self.extended_mode == 0:
             logger.info("Assuming all sequences are from NORW/COGUK (subsampling will be UK-centric)")
@@ -127,6 +135,12 @@ class PerobaBackbone:
                 'submission_org_code':"NORW" ,'submission_org':"Norwich"})
             new_rows = new_rows.groupby("peroba_seq_uid").aggregate("first") # duplicate sequences --> this makes peroba_seq_uid the index 
             self.g_csv = self.g_csv.combine_first(new_rows)
+        if (self.fast_mode_seqs is True):
+            if len (s_new) > 0:
+                self.fast_mode_seqs = s_new
+            else:
+                logger.warning ("Fast mode selected but no new local sequences found (all already found on database); Changing back to slow mode")
+                self.fast_mode_seqs = False
 
         logger.info("%s long-named sequences and %s short-named sequences found on database. %s new sequences (not in database).",
                 str(len(s_long)), str(len(s_short)), str(len(s_new))) # obvious duplicates were checked by initial_quality_control()
@@ -150,7 +164,7 @@ class PerobaBackbone:
         else:
             seq_list = [x for x in sequence.values()]
 
-        if len(seq_list) > 0: # we have new sequences, not yet in COGUK
+        if len(seq_list) > 0: # we have new sequences, not yet in COGUK 
             sqn = [x.id for x in seq_list]
             logger.info("Will update frequency info and align %s sequences", str(len(sqn)))
             sqn = self.g_csv["sequence_name"].isin(sqn)
@@ -228,10 +242,16 @@ class PerobaBackbone:
         logger.info("Finding SNPs to speed up calculations")
         snp_aln = snpsites_from_alignment ([x for x in self.g_seq.values()], strict=strict)
         logger.info("In total %s SNPs were found (i,e, alignment size)", len(snp_aln[0].seq))
+        
+        if (self.fast_mode_seqs is False):
+            logger.info ("Splitting data into global and local (NORW)")
+            self.l_csv = self.g_csv[  self.g_csv["submission_org_code"].str.contains("NORW", na=False) ]
+            self.g_csv = self.g_csv[ ~self.g_csv["submission_org_code"].str.contains("NORW", na=False) ]
+        else:
+            logger.info ("Splitting data into local (not found on COGUK) and global (COGUK)")
+            self.l_csv = self.g_csv[  self.g_csv["sequence_name"].isin(self.fast_mode_seqs) ] # list of names
+            self.g_csv = self.g_csv[ ~self.g_csv["sequence_name"].isin(self.fast_mode_seqs) ]
 
-        logger.info ("Splitting data into global and local (NORW)")
-        self.l_csv = self.g_csv[  self.g_csv["submission_org_code"].str.contains("NORW", na=False) ]
-        self.g_csv = self.g_csv[ ~self.g_csv["submission_org_code"].str.contains("NORW", na=False) ]
         self.l_seq = {x:y for x,y in self.g_seq.items() if x in self.l_csv["sequence_name"]}
         self.g_seq = {x:y for x,y in self.g_seq.items() if x in self.g_csv["sequence_name"]}
         
@@ -447,6 +467,10 @@ class PerobaBackbone:
         else: ## local (COGUK) mode
             n1 = self.find_neighbours_ball(blocks = 1500, leaf_size = 400, dist_blocks = 3, nn = 5) 
             n2 = self.find_neighbours_paf (blocks = 2000, leaf_size = 500, n_segments = 1, nn = 10, exclude = n1) 
+
+        if self.fast_mode_seqs is not False: # Add all remaining NORW sequences as _global_ 
+            n1 = list(set(n1 + n2))
+            n2 = self.g_csv.loc[(self.g_csv["submission_org_code"].str.contains("NORW", na=False)), "sequence_name"].tolist()
         return list(set(n1 + n2))
 
 def save_global_from_seqnames (bb, seqnames, prefix):
@@ -460,6 +484,7 @@ def save_global_from_seqnames (bb, seqnames, prefix):
     
     # format(colour_string(desc).ljust(32, ' ')) # not using ljust anymore
     desc  = "{}\n Aligned sequences selected from global data\n".format(colour_string(desc))
+
     fname = os.path.basename(fname)
     desc += "{}\n Pruned trees, with leaves only from global data (please refer to 'user' trees below for phylo inference)\n".format(colour_string(fname))
     desc += " First tree is full tree from COGUK, remaining trees are provided from user, if any\n"
@@ -603,9 +628,9 @@ def sequences_initial_quality_control (sequences, min_length = 20000, max_freq_N
 
     return [x for x in uniq_seqs.values()]
 
-def main_generate_backbone_dataset (database, csv, sequences, trees, prefix, global_level):
+def main_generate_backbone_dataset (database, csv, sequences, trees, prefix, global_level, fast_mode):
     # initialisation
-    bb = PerobaBackbone (database, global_level)
+    bb = PerobaBackbone (database, global_level, fast_mode)
     sequences = sequences_initial_quality_control (sequences) # very bad sequences break MAFFT
     bb.add_local_data_and_sequences (csv, sequences)
     bb.finalise_and_split_data_sequences()
@@ -616,15 +641,21 @@ def main_generate_backbone_dataset (database, csv, sequences, trees, prefix, glo
     # all methods come here
     neighbours = bb.find_neighbours()
     # for each method we can use chosen neighbours to save global only or both
+    if bb.fast_mode_seqs is False:
+        all_seqs_fname = "norw-coguk"
+        loc_seqs_fname = "norw.aln.xz"
+    else:
+        all_seqs_fname = "local-coguk"
+        loc_seqs_fname = "local.aln.xz"
     description  = save_global_from_seqnames (bb, neighbours, prefix + "coguk")
     description += save_user_trees (bb, neighbours, prefix + "user", add_nj_tree = True)
-    description += save_all_sequences (bb, neighbours, prefix + "norw-coguk", add_nj_tree = True)
-    # finally, save all NORW sequences
-    desc =  common.save_sequence_dict_to_file (bb.l_seq, prefix + "norw.aln.xz")
+    description += save_all_sequences (bb, neighbours, prefix + all_seqs_fname, add_nj_tree = True)
+    # finally, save all NORW sequences (or local, if fast_mode)
+    desc =  common.save_sequence_dict_to_file (bb.l_seq, prefix + loc_seqs_fname)
     description += "{}\n alignment with all local sequences only\n".format(colour_string(desc))
 
     print ("Finished. The output files are described below, where 'global' means COGUK and GISAID data which were ")
-    print ("{} generated in NORW. Those, together with the extra sequences are being called'local'.".format(colour_string("not", "red")))
+    print ("{} generated in NORW. Those, together with the extra sequences are being called 'local'.".format(colour_string("not", "red")))
     print (f"Files produced:\n{description}")
     
 class ParserWithErrorHelp(argparse.ArgumentParser):
@@ -638,8 +669,8 @@ def main():
     description="""
     peroba_backbone is the script that generates a global backbone data set (COGUK+GISAID) given a local one (NORW).
     It depends on the prefix for a perobaDB set of files (from `peroba_database`), like "perobaDB.0519".
-    It's recommended that you also local sequences, even without CSV metadata. You can furthermore add a newick file with extra 
-    trees (the tree from previous run is a good choice).
+    It's recommended that you also include local sequences, even without CSV metadata. You can furthermore add a newick file with extra 
+    trees (the tree from previous run, for instance).
     """, 
     usage='''peroba_backbone <perobaDB> [options]''')
 
@@ -654,6 +685,8 @@ def main():
     parser.add_argument('-o', '--output', action="store", help="Output database directory. Default: working directory")
     parser.add_argument('-g', '--global_level', metavar='[0,1,2]', type=int, default=0, 
         help="how broad the search should be (default=0 wich means local (COGUK) new samples only)")
+    parser.add_argument('-f', '--fast', default=False, action='store_true', 
+        help="Fast mode (known NORW samples are added to backbone and not to query)")
     parser.add_argument('-r', '--trust', default=False, action='store_true', 
         help="Trust global sequences, skipping quality comparison for matches")
 
@@ -724,7 +757,7 @@ def main():
                 logger.info("%s leaves in treefile %s", len(tree_leaves), str(i))
                 trees.append(tre)
 
-    main_generate_backbone_dataset (database, csv, sequences, trees, prefix, args.global_level)
+    main_generate_backbone_dataset (database, csv, sequences, trees, prefix, args.global_level, args.fast)
 
 
 if __name__ == '__main__':

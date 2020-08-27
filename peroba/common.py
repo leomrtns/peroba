@@ -106,7 +106,7 @@ def read_fasta (filename, fragment_size = 0, check_name = False):
     else:  this_open = open
     with this_open(filename, "rt") as handle:
         for record in SeqIO.parse(handle, "fasta"):
-            record.seq  = record.seq.upper()
+            record.seq  = Seq.Seq(str(record.seq.upper()).replace(".","N")) # one damn sequence has dots 
             # record.name = name_without_spaces.hash() ## IDEA
              # # seq names are a mess, it's better to map using metadata as key (however we have keys as "D02" etc
             # COG-UK/SHEF-D34A0/SHEF:20200423_1347_X1_FAN43269_d941f767|SHEF-D34A0|... 

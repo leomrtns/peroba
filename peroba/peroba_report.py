@@ -300,12 +300,18 @@ def main_prepare_report_files (metadata0, csv0, tree, tree_leaves, input_dir, ou
     # pdf pandoc (using eisvogel)
     runstr = f"cd {output_dir} && pandoc {mkd_pdf_file} -o {pdf_file_name} --from markdown --template {pandoc_template_name} --listings"
     logger.info("running command:: %s", runstr)
-    proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)
+    try:
+        proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)
+    except:
+        logger.warning("Could not generate PDF report (usually due to some huge figure; check directory 'figures/")
     logger.debug("output verbatim:\n%s",proc_run)
     # html pandoc (using embedded css)
     runstr = f"cd {output_dir} && pandoc -s {mkd_htm_file} -o {htm_file_name} --toc"
     logger.info("running command:: %s", runstr)
-    proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)
+    try:
+        proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)
+    except:
+        logger.warning("Could not generate HTML report (maybe due to some huge figure? check directory 'figures/")
     logger.debug("output verbatim:\n%s",proc_run)
     
 class ParserWithErrorHelp(argparse.ArgumentParser):
