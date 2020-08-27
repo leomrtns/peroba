@@ -33,6 +33,7 @@ def list_duplicates (seq_dict, blocks = 4, leaf_size = 500, radius=0.00001):
 def list_r_neighbours (g_seq, l_seq, blocks = 1000, leaf_size = 500, dist_blocks = 1):
     g_aln = [x for x in g_seq.values()]
     l_aln = [x for x in l_seq.values()]
+    logger.info("DBG::Global = %s local = %s",str(len(g_aln)), str(len(l_an)))
     genome_size = len(g_aln[0].seq) ## only works for aligned sequences
     block_size = int(genome_size / blocks)
     if (block_size < 1): block_size = 1
