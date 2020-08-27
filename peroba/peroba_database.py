@@ -254,7 +254,7 @@ def main():
     logging.basicConfig(level=args.loglevel)
     if args.output: 
         output_d = os.path.join(current_working_dir, args.output)
-        pathlib.Path(output_d).mkdir(parents=True, exist_ok=True) # python 3.5+ create dir if it doesn't exist
+        common.pathlib.Path(output_d).mkdir(parents=True, exist_ok=True) # python 3.5+ create dir if it doesn't exist
     else: 
         output_d = current_working_dir
     prefix = os.path.join(output_d, common.prefix["database"] + datetime.datetime.now().strftime("%m%d"))

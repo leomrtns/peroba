@@ -284,11 +284,11 @@ class PerobaBackbone:
             newseqs = {x:y for x,y in self.g_seq.items() if x in seqnames}
             newsnps = {x:y for x,y in self.g_snp.items() if x in seqnames}
             seqnames += self.l_csv["sequence_name"].tolist() # add all local to avoid being pruned 
+        logger.info("Finding tree leaves to be pruned (this step is slow)")
         newtrees = []
         for i,t in enumerate(self.trees): # computing-intensive step 
             remove_leaf = []
-            for l in t.traverse_leaves():
-                lab = l.get_label()
+            for lab in t.labels(internal=False): 
                 if lab not in seqnames:
                     remove_leaf.append(lab)
             if len(remove_leaf) > 0:
@@ -698,7 +698,7 @@ def main():
     logging.basicConfig(level=args.loglevel)
     if args.output: 
         output_d = os.path.join(current_working_dir, args.output)
-        pathlib.Path(output_d).mkdir(parents=True, exist_ok=True) # python 3.5+ create dir if it doesn't exist
+        common.pathlib.Path(output_d).mkdir(parents=True, exist_ok=True) # python 3.5+ create dir if it doesn't exist
     else: 
         output_d = current_working_dir
     prefix = os.path.join(output_d, "peroba_backbone." + datetime.datetime.now().strftime("%m%d_%H%M") + ".")

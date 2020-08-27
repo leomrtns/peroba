@@ -48,12 +48,12 @@ def list_r_neighbours (g_seq, l_seq, blocks = 1000, leaf_size = 500, dist_blocks
     clusters = []
     n_iter = 0
     while len(clusters) < 1 and n_iter < 6:
-        logger.info("Iter {5d}: trying to find neighbours with distance smaller than {:.6f}".format(n_iter, radius))
+        logger.info("Iter {}: trying to find neighbours with distance smaller than {:.6f}".format(n_iter, radius))
         idx = btre.query_radius(l_hash, r=radius, return_distance=False) # gives global neighbours to each local sequence; return_distance is expensive
         clusters = list(set([g_aln[j].id for x in idx for j in x])) # one-dimentional list of all global neighbours
         radius = radius * 2; 
         n_iter += 1;
-    if (len(cluster) < 1):
+    if (len(clusters) < 1):
         logger.warning ("Could not find neighours close enough;")
     del g_aln, g_hash, l_aln, l_hash, btre, idx
     return clusters
