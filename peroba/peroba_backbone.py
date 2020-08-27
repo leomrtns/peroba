@@ -658,9 +658,14 @@ def main_generate_backbone_dataset (database, csv, sequences, trees, prefix, glo
     desc =  common.save_sequence_dict_to_file (bb.l_seq, prefix + loc_seqs_fname)
     description += "{}\n alignment with all local sequences only\n".format(colour_string(desc))
 
-    print ("Finished. The output files are described below, where 'global' means COGUK and GISAID data which were ")
-    print ("{} generated in NORW. Those, together with the extra sequences are being called 'local'.".format(colour_string("not", "red")))
-    print (f"Files produced:\n{description}")
+    if (fast_mode is False):
+        print ("Finished. The output files are described below, where 'global' means COGUK and GISAID data which ")
+        print ("were {} generated in NORW. Sequences recognised as NORW (from database or not), together with the ".format(colour_string("not", "red")))
+        print (f"extra sequences provided are 'local', and file names include 'norw'. Files produced are described below:\n{description}")
+    else:
+        print ("Finished. The output files are described below, where 'global' means COGUK/GISAID data, including NORW ones.")
+        print ("The 'local' sequences include only those {} found in the perobaDB database.".format(colour_string("not", "red")))
+        print (f"Files produced are described below:\n{description}")
     
 class ParserWithErrorHelp(argparse.ArgumentParser):
     def error(self, message):
