@@ -243,7 +243,7 @@ class PerobaSubsample:
         n_remain = int (fraction_remain * self.csv.shape[0]) + 1
         if n_remain < 16:
             return
-        logger.info(f"Finding the {n_remain} most distant leaves in the tree")
+        logger.info(f"Finding the {n_remain} most distant leaves in the tree to store in {new_col_name}")
         leafnames = pda_names_from_tree (self.tree, n_remain = n_remain)
         df = pd.DataFrame({"peroba_seq_uid":leafnames, new_col_name:1})
         df.set_index("peroba_seq_uid", inplace=True)
