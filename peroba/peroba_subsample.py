@@ -239,24 +239,25 @@ class PerobaSubsample:
         self.csv_new[new_col_name] = self.csv_new[new_col_name].fillna(0)
 #        self.seq, self.snp, self.tree = self.remove_seq_tree_based_on_metadata()
 
-    def find_pda_samples (self, fraction_remain = 0.5):
+    def find_pda_samples (self, fraction_remain, new_col_name):
         n_remain = int (fraction_remain * self.csv.shape[0]) + 1
         if n_remain < 16:
             return
         logger.info(f"Finding the {n_remain} most distant leaves in the tree")
         leafnames = pda_names_from_tree (self.tree, n_remain = n_remain)
-        df = pd.DataFrame({"peroba_seq_uid":leafnames, "peroba_pda":1})
+        df = pd.DataFrame({"peroba_seq_uid":leafnames, new_col_name:1})
         df.set_index("peroba_seq_uid", inplace=True)
         if (self.csv_new is None):
             self.csv_new = df
         else:
             self.csv_new = self.csv_new.combine_first(df)
-        self.csv_new["peroba_pda"] = self.csv_new["peroba_pda"].fillna(0)
+        self.csv_new[new_col_name] = self.csv_new[new_col_name].fillna(0)
 
 
     def save_subsample (self, f_prefix):
         self.csv_new["peroba_subsample"] = 1 # this all-one column will be used once merged with big metadata 
         fname = f_prefix + common.suffix["subsample"]
+        logger.info(f"Saving table to {fname}")
         self.csv_new.to_csv(fname)
 
 
@@ -288,6 +289,8 @@ def main_generate_subsample_dataset (f_prefix):
     bb.reduce_redundancy(0, "peroba_level_0") 
     bb.reduce_redundancy(1, "peroba_level_1") 
     bb.reduce_redundancy(2, "peroba_level_2") 
+    bb.find_pda_samples(0.5, "peroba_pda_50")
+    bb.find_pda_samples(0.75, "peroba_pda_75")
     bb.save_subsample (f_prefix)
 
     
