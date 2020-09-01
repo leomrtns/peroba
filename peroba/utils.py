@@ -248,7 +248,7 @@ def rapidnj_from_alignment (sequences = None, infile = None, outfile = None, pre
     if outfile is None: os.system("rm -f " + ofl)
     return treestring
 
-def pda_from_tree (tree, infile = None, outfile = None, prefix = "/tmp/", n_remain = 500):
+def pda_tree_from_tree (tree, infile = None, outfile = None, prefix = "/tmp/", n_remain = 500):
     if (tree is None) and (infile is None):
         print ("ERROR: You must give me a tree object or file")
     if prefix is None: prefix = "./"
@@ -258,13 +258,28 @@ def pda_from_tree (tree, infile = None, outfile = None, prefix = "/tmp/", n_rema
     else:               ofl = outfile
     tree.write(format=1, outfile=ifl)
     n_remain = str(n_remain)
-    runstr = f"iqtree -te {ifl} -k {n_remain}; tail -n 6 {ifl}.pda | head -1 > {ofl}"
+    runstr = f"iqtree2 -t {ifl} -k {n_remain}; tail -n 6 {ifl}.pda | head -1 > {ofl}"
     proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)    
     treestring = open(ofl).readline().rstrip().replace("\'","").replace("\"","").replace("[&R]","")
     tree_out = ete3.Tree (treestring)
     if infile is None:  os.system("rm -f " + ifl)
     if outfile is None: os.system("rm -f " + ofl)
     return tree_out
+
+def pda_names_from_tree (tree, infile = None, prefix = "/tmp/", n_remain = 500):
+    if (tree is None) and (infile is None):
+        print ("ERROR: You must give me a tree object or file")
+    if prefix is None: prefix = "./"
+    if infile is None: ifl = prefix + "bigtree.tre"
+    else:              ifl = infile
+    tree.write(format=1, outfile=ifl)
+    n_remain = str(n_remain)
+    runstr = f"iqtree2 -t {ifl} -k {n_remain}"
+    proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)    
+    pda_table = [x.rstrip() for x in open(f"{ifl}.pda").readlines()]
+    idx = [i for i,y in enumerate(pda_table) if "The optimal PD set has" in y][0] # line before seq names
+    if infile is None:  os.system("rm -f " + ifl)
+    return pda_table[idx+1:idx+n_remain+1] 
 
 def improve_tree_from_align (tree, align, if_tre = None, of_tre = None, a_file = None, prefix = "/tmp/", n_threads = 4, params=None):
     if (tree is None) and (if_tre is None):

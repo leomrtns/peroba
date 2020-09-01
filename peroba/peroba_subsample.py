@@ -44,11 +44,10 @@ fill_missing_cols = ["lineage", "acc_lineage", "del_lineage", "submission_org_co
 # cast type as numeric, to allow comparison/sorting
 numeric_cols = ['peroba_freq_acgt', 'peroba_freq_n', "PCR Ct value", "Coverage (X)",'lineage_support']
 
-class PerobaBackbone:
+class PerobaSubsample:
     csv = None
-    csvnew = None # new columns only 
+    csv_new = None # new columns only 
     seq = None # dictionary
-    snp = None # must match local, therefore calculated first 
     tree = None 
     # subset of columns from that may be useful (drop others)
     cols = ["sequence_name", "central_sample_id", "submission_org_code", "submission_org", "collection_datetime", 
@@ -84,7 +83,6 @@ class PerobaBackbone:
     
     def sort_categories (self):
         df = self.csv
-        logger.info("Ordering metadata after categorisation") 
         if "adm2" in df.columns:
             df["adm2"] = df["adm2"].replace(["Unknown Source","Unknown", np.nan],"")
             df["adm2"] = df["adm2"].replace({"Greater London":"Greater_London", "Hertfordshire":"Herefordshire"})
@@ -100,6 +98,7 @@ class PerobaBackbone:
         pref = [x for x in prefsort if x[0] in df.columns] # sort only existing columns
 
         ## local -- assume sequences from NORW or UK at least
+        logger.info("Ordering metadata after categorisation -- UK-centric order") 
         sort_cols = [x[0] for x in pref] # follow this order (thus can't use dict...)
         sort_ascend = [x[1] for x in pref] # same order as sort_cols
         for col,favs in favourite_cats.items(): # favourite_cats happens to have local columns as keys
@@ -109,26 +108,26 @@ class PerobaBackbone:
                 df[col] = pd.Categorical(df[col], categories = values, ordered=True)
         df = df.sort_values(by=sort_cols, ascending=sort_ascend)
         df['peroba_local_order'] = np.arange(len(df)) # new column
-        df = df['peroba_local_order']
-        self.csv = self.csv.combine_first(df)
+        self.csv = self.csv.combine_first(df[['peroba_local_order']])
 
         ## global -- assme seqs from outside UK, do not focus on uk_lineage or NORW regions
+        logger.info("Ordering metadata after categorisation -- global order") 
         df = self.csv 
         pref = [x for x in pref if x not in favourite_cats.values()] # exclude uk centric preferences
         sort_cols = [x[0] for x in pref] # follow this order (thus can't use dict...)
         sort_ascend = [x[1] for x in pref] # same order as sort_cols
         df = df.sort_values(by=sort_cols, ascending=sort_ascend)
         df['peroba_global_order'] = np.arange(len(df)) # new column
-        df = df['peroba_global_order']
-        self.csv = self.csv.combine_first(df)
+        self.csv = self.csv.combine_first(df[['peroba_global_order']])
 
     def finalise_data_sequences (self, trim = True, strict = False):
         self.trim_sequences(trim=trim)
         self.sort_categories()
-        logger.info("Finding SNPs to speed up calculations")
-        snp_aln = snpsites_from_alignment ([x for x in self.seq.values()], strict=strict)
-        logger.info("In total %s SNPs were found (i,e, alignment size)", len(snp_aln[0].seq))
-        self.snp = {x.id:x for x in snp_aln}
+        #logger.info("Finding SNPs to speed up calculations")
+        #snp_aln = snpsites_from_alignment ([x for x in self.seq.values()], strict=strict)
+        #logger.info("In total %s SNPs were found (i,e, alignment size)", len(snp_aln[0].seq))
+        #self.snp = {x.id:x for x in snp_aln}
+        
         #l_snp = [x for x in snp_aln if x.id in self.l_csv["sequence_name"]]
         #idx = sorted_uncertainty_from_alignment (l_snp, max_freq_n = 0.01)
         #logger.info("Compact representation uses %s SNPs (columns from local seqs with fewer Ns)", len(idx))
@@ -139,7 +138,6 @@ class PerobaBackbone:
             logger.info("removing sequences after metadata update")
             seqnames = self.csv["sequence_name"].tolist()
         newseqs = {x:y for x,y in self.seq.items() if x in seqnames}
-        newsnps = {x:y for x,y in self.snp.items() if x in seqnames}
         logger.info("Finding tree leaves to be pruned (this step is slow)")
         remove_leaf = []
         for lab in self.tree.labels(internal=False): 
@@ -150,16 +148,20 @@ class PerobaBackbone:
             newtree = self.tree.extract_tree_without(remove_leaf)
         else:
             newtree = self.tree
-        return  newseqs, newsnps, newtree
+        return  newseqs, newtree
 
     def remove_low_quality (self, f_acgt = 0.8, f_n = 0.1):
-        logger.info(f"Remove global sequences with proportion of ACGT less than  {g_acgt} or proportion of N higher than {g_n}")
+        logger.info(f"Removing sequences with proportion of ACGT less than {f_acgt} or proportion of N higher than {f_n}")
         self.csv = self.csv.loc[ (self.csv["peroba_freq_acgt"] > f_acgt) & (self.csv["peroba_freq_n"] < f_n) ]
-        self.seq, self.snp, self.tree = self.remove_seq_tree_based_on_metadata()
+        if "host" in self.csv.columns:
+            self.csv = self.csv[ self.csv["host"].str.contains("Human",case=False,na=True) ]
+        
+        logger.info("Database has now %s rows (after removing low-quality and non-human samples)", str(self.csv.shape[0]))
+        self.seq, self.tree = self.remove_seq_tree_based_on_metadata()
 
-    def remove_duplicates (self, blocks = 4, leaf_size = 500, radius=0.00001):
+    def remove_duplicates (self, blocks = 2, leaf_size = 500, radius=0.00001):
         logger.info("Removing duplicates (identical sequences) from data")
-        clusters = ml.list_duplicates (self.snp, blocks, leaf_size, radius)
+        clusters = ml.list_duplicates (self.seq, blocks, leaf_size, radius)
 
         df = pd.DataFrame([[y,i] for i,x in enumerate(clusters) for y in x], columns=["sequence_name","peroba_tmp"])
         df = df.sort_values(by=["peroba_tmp"], ascending=True) # same sequence belongs to several clusters
@@ -168,7 +170,7 @@ class PerobaBackbone:
 
         self.csv.reset_index (drop=False, inplace=True) ## merge will destroy index...
         df = self.csv.merge(df, on="sequence_name")
-        df = df.sort_values(by=self.sort_cols, ascending=self.sort_ascend)
+        df = df.sort_values(by="peroba_global_order", ascending=True) # break ties by global order (i.e. not giving preference to UK)
 
         ## create list of accepted seqnames instead of deleting rows; replace peroba_tmp by peroba_group
         #for c in [x for x in replace_duplicate_cols if x in df.cols]: # most common value amongst identical sequences
@@ -177,7 +179,7 @@ class PerobaBackbone:
         df = df.groupby("peroba_tmp").aggregate("first") # only one sequence from each cluster, following self.order_col preference
         df.set_index ("peroba_seq_uid", drop = True, inplace = True)
         self.csv = df
-        #self.seq, self.snp, self.tree = self.remove_seq_tree_based_on_metadata()
+        self.seq, self.tree = self.remove_seq_tree_based_on_metadata()
     
     def reduce_redundancy (self, extended_mode, new_col_name):
         clade_rule = [ # rules can be repeated, for different thresholds; some samples fall into several 
@@ -229,7 +231,7 @@ class PerobaBackbone:
         dfcat = dfcat.groupby(dfcat.index).aggregate("first") # many rows will be duplicated before this groupby()
         logger.info("After subsampling, global metadata has %s samples", dfcat.shape[0])
         dfcat[new_col_name] = 1
-        dfcat = dfcat[new_col_name]
+        dfcat = dfcat[[new_col_name]]
         if (self.csv_new is None):
             self.csv_new = dfcat
         else:
@@ -237,7 +239,22 @@ class PerobaBackbone:
         self.csv_new[new_col_name] = self.csv_new[new_col_name].fillna(0)
 #        self.seq, self.snp, self.tree = self.remove_seq_tree_based_on_metadata()
 
-    def save_subsample (f_prefix):
+    def find_pda_samples (self, fraction_remain = 0.5):
+        n_remain = int (fraction_remain * self.csv.shape[0]) + 1
+        if n_remain < 16:
+            return
+        logger.info(f"Finding the {n_remain} most distant leaves in the tree")
+        leafnames = pda_names_from_tree (self.tree, n_remain = n_remain)
+        df = pd.DataFrame({"peroba_seq_uid":leafnames, "peroba_pda":1})
+        df.set_index("peroba_seq_uid", inplace=True)
+        if (self.csv_new is None):
+            self.csv_new = df
+        else:
+            self.csv_new = self.csv_new.combine_first(df)
+        self.csv_new["peroba_pda"] = self.csv_new["peroba_pda"].fillna(0)
+
+
+    def save_subsample (self, f_prefix):
         self.csv_new["peroba_subsample"] = 1 # this all-one column will be used once merged with big metadata 
         fname = f_prefix + common.suffix["subsample"]
         self.csv_new.to_csv(fname)
@@ -260,7 +277,7 @@ def read_peroba_database (f_prefix):
     sequences = common.read_fasta (fname, check_name = False)
 
     logger.info("Finished loading the database; dataframe has dimensions %s and it's assumed we have the same number of sequences; the tree may be smaller", metadata.shape)
-    return [metadata, sequences, tree, unaligned]
+    return [metadata, sequences, tree]
 
 def main_generate_subsample_dataset (f_prefix):
     # initialisation
