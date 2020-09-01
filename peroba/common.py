@@ -30,6 +30,7 @@ prefix = {
         }
 suffix = {
         "metadata": ".metadata.csv.gz",
+        "subsample": ".subsample.csv.gz",
         "raw": ".raw.csv.gz",
         "tree": ".tree.nhx",
         "sequences": ".sequences.fasta.xz",
