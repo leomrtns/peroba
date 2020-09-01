@@ -257,7 +257,7 @@ def pda_tree_from_tree (tree, infile = None, outfile = None, prefix = "/tmp/", n
     if outfile is None: ofl = prefix + "pda.tre"
     else:               ofl = outfile
     if isinstance(tree, treeswift.Tree):
-        tree.write_tree_newick (outfile=ifl)
+        tree.write_tree_newick (ifl)
     else:
         tree.write(format=1, outfile=ifl)
     n_remain = str(n_remain)
@@ -276,7 +276,7 @@ def pda_names_from_tree (tree, infile = None, prefix = "/tmp/", n_remain = 500):
     if infile is None: ifl = prefix + "bigtree.tre"
     else:              ifl = infile
     if isinstance(tree, treeswift.Tree):
-        tree.write_tree_newick (outfile=ifl)
+        tree.write_tree_newick (ifl)
     else:
         tree.write(format=1, outfile=ifl)
     n_remain = str(n_remain)
