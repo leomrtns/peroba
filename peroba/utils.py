@@ -256,12 +256,15 @@ def pda_tree_from_tree (tree, infile = None, outfile = None, prefix = "/tmp/", n
     else:              ifl = infile
     if outfile is None: ofl = prefix + "pda.tre"
     else:               ofl = outfile
-    tree.write(format=1, outfile=ifl)
+    if isinstance(tree, treeswift.Tree):
+        tree.write_tree_newick (outfile=ifl)
+    else:
+        tree.write(format=1, outfile=ifl)
     n_remain = str(n_remain)
     runstr = f"iqtree2 -t {ifl} -k {n_remain}; tail -n 6 {ifl}.pda | head -1 > {ofl}"
     proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)    
     treestring = open(ofl).readline().rstrip().replace("\'","").replace("\"","").replace("[&R]","")
-    tree_out = ete3.Tree (treestring)
+    tree_out = ete3.Tree (treestring)# FIXME: why ete3?
     if infile is None:  os.system("rm -f " + ifl)
     if outfile is None: os.system("rm -f " + ofl)
     return tree_out
@@ -272,7 +275,10 @@ def pda_names_from_tree (tree, infile = None, prefix = "/tmp/", n_remain = 500):
     if prefix is None: prefix = "./"
     if infile is None: ifl = prefix + "bigtree.tre"
     else:              ifl = infile
-    tree.write(format=1, outfile=ifl)
+    if isinstance(tree, treeswift.Tree):
+        tree.write_tree_newick (outfile=ifl)
+    else:
+        tree.write(format=1, outfile=ifl)
     n_remain = str(n_remain)
     runstr = f"iqtree2 -t {ifl} -k {n_remain}"
     proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)    
