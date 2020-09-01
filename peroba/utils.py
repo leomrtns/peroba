@@ -3,7 +3,7 @@ from Bio import Seq, SeqIO, Align, AlignIO, Alphabet
 from Bio.SeqRecord import SeqRecord
 from Bio.Align import AlignInfo
 import numpy as np
-import datetime, sys, gzip, lzma, bz2, re, subprocess, os, itertools, ete3, collections, logging
+import treeswift, datetime, sys, gzip, lzma, bz2, re, subprocess, os, itertools, ete3, collections, logging
 
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False
