@@ -279,7 +279,6 @@ def pda_names_from_tree (tree, infile = None, prefix = "/tmp/", n_remain = 500):
         tree.write_tree_newick (ifl)
     else:
         tree.write(format=1, outfile=ifl)
-    n_remain = str(n_remain)
     runstr = f"iqtree2 -t {ifl} -k {n_remain}"
     proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)    
     pda_table = [x.rstrip() for x in open(f"{ifl}.pda").readlines()]

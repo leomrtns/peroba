@@ -53,7 +53,8 @@ dtype_numeric_cols = [
         'source_age', 'virus', 'lineage_support',  # upstream  (coguk+gisaid)
         "peroba_freq_acgt", "peroba_freq_n", "PCR Ct value", "Coverage (X)",  # local (peroba, NORW)
         "ct_1_ct_value", "ct_2_ct_value", "No. Reads", "Mapped Reads", "No. Bases (Mb)",
-        "Average read length", "Missing bases (N)", "Consensus SNPs"]
+        "Average read length", "Missing bases (N)", "Consensus SNPs",
+        "peroba_level_0", "peroba_level_1", "peroba_level_2", "peroba_pda_50", "peroba_pda_75", "peroba_pda_95", "peroba_subsample"]
 
 dtype_datetime_cols = ["date_submitted", "collection_date", "received_date", "sequencing_submission_date", "start_time",
       "date_sequenced"] # from NORW metadata

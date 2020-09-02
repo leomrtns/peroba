@@ -58,7 +58,7 @@ class PerobaSubsample:
             "adm2_private", "Repeat Sample ID", "icu_admission", "PCR Ct value", "No. Reads", "Mapped Reads", 
             "No. Bases (Mb)", "Coverage (X)", "Average read length", "Basic QC", "High Quality QC", "Missing bases (N)",
             "Consensus SNPs"] 
-    cols = ["sequence_name", "central_sample_id", "submission_org_code", "collection_date", 
+    cols = ["sequence_name", "central_sample_id", "submission_org_code", "collection_date", "host", 
             "adm0", "adm1", "adm2", "acc_lineage", "del_lineage",  "country" , "lineage", 
             "lineage_support", "uk_lineage", "phylotype", "peroba_freq_acgt", "peroba_freq_n", "peroba_seq_uid"] 
     sort_cols = None 
@@ -66,7 +66,6 @@ class PerobaSubsample:
 
     def __init__ (self, peroba_db): # peroba_db = [metadata, aligned seqs, tree]  
         self.csv = peroba_db[0]  # formatted metadata
-        self.csv0 = self.csv.copy()
         self.seq = {x.id:x for x in peroba_db[1]} # dictionary
         self.tree = peroba_db[2] 
         cols = [x for x in self.cols if x in peroba_db[0].columns]
@@ -240,7 +239,8 @@ class PerobaSubsample:
 #        self.seq, self.snp, self.tree = self.remove_seq_tree_based_on_metadata()
 
     def find_pda_samples (self, fraction_remain, new_col_name):
-        n_remain = int (fraction_remain * self.csv.shape[0]) + 1
+        n_leaves = self.tree.num_nodes(internal=False) 
+        n_remain = int (fraction_remain * n_leaves) + 1
         if n_remain < 16:
             return
         logger.info(f"Finding the {n_remain} most distant leaves in the tree to store in {new_col_name}")
@@ -256,6 +256,9 @@ class PerobaSubsample:
 
     def save_subsample (self, f_prefix):
         self.csv_new["peroba_subsample"] = 1 # this all-one column will be used once merged with big metadata 
+        seqnames = self.csv["sequence_name"].tolist()
+        self.csv_new = self.csv_new[ self.csv_new.index.isin(seqnames) ]
+        self.csv_new = self.csv_new.fillna(0)
         fname = f_prefix + common.suffix["subsample"]
         logger.info(f"Saving table to {fname}")
         self.csv_new.to_csv(fname)
@@ -291,8 +294,8 @@ def main_generate_subsample_dataset (f_prefix):
     bb.reduce_redundancy(2, "peroba_level_2") 
     bb.find_pda_samples(0.5, "peroba_pda_50")
     bb.find_pda_samples(0.75, "peroba_pda_75")
+    bb.find_pda_samples(0.95, "peroba_pda_95")
     bb.save_subsample (f_prefix)
-
     
 class ParserWithErrorHelp(argparse.ArgumentParser):
     def error(self, message):
