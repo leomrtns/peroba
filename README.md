@@ -9,28 +9,29 @@ __Leonardo de Oliveira Martins<sup>1</sup>__
 incorporated. 
 It is been developed as a phylogenetic tracking tool to aggregate samples sequenced at the QIB 
 with global information from [COG-UK](https://www.cogconsortium.uk/) and [GISAID](https://www.gisaid.org/). 
-Therefore you will not find any real data here, although [all COG-UK data are available
-online](https://www.cogconsortium.uk/data/).
-If you find any report/results/data here, it will be random/rubish (due to privacy reasons) and cannot be used or
+Therefore you will not find any real data here ([all COG-UK data are available
+online](https://www.cogconsortium.uk/data/) however).
+If you find any report/results/data here, it is from randomised/simulated data (due to privacy reasons) and cannot be used or
 interpreted. 
 
-This tool is not useful (yet) to the scientific community at large, you may need to be familiar and have access to the 
-COGUK consortium to make sense of some variables.
-Peroba is under active testing and development, being employed at the QIB but with hope others may find it useful.
-If you are looking for more stable COGUK-related tools, please see the ones available at 
-[https://github.com/COG-UK](https://github.com/COG-UK) (in particular [civet](https://github.com/COG-UK/civet) or 
-[phylo reports](https://github.com/COG-UK/phylo-reports)) and [https://github.com/cov-lineages](https://github.com/cov-lineages).
+This tool may not be very useful yet for general phylogenetic analyses, you may need to have access to the 
+COGUK consortium or at least be familiar with it to make sense of some variables.
+If you are looking for more stable COGUK-related tools, please have a look at 
+[https://github.com/COG-UK](https://github.com/COG-UK) (for instance [civet](https://github.com/COG-UK/civet) or 
+[phylo reports](https://github.com/COG-UK/phylo-reports)) and [https://cov-lineages.org/](https://cov-lineages.org/).
+Peroba is under active testing and development, it is being employed at the QIB but we hope others may find it useful.
 
 
 **peroba** is the name of an [endangered Brazilian timber tree](https://en.wikipedia.org/wiki/Aspidosperma_polyneuron).
 But if you like acronyms it stands for Phylogenetic Epidemiology with ROBust Assignment. 
 
 ## Modules
-**peroba** is composed of three modules, that should be run in order:
+**peroba** is composed of four modules, that should be run in order:
 1. **`peroba_database`**: This script collects information from several sources and generates a set of `perobaDB` files.
-2. **`peroba_backbone`**: This script selects a set of "global" sequences from `perobaDB` to be analysed together with the local ones 
+2. **`peroba_subsample`**: creates a table with several selections of samples from the `perobaDB` database
+3. **`peroba_backbone`**: This script selects a set of "global" sequences from `perobaDB` to be analysed together with the local ones 
 (`NORW`). It finds local sequences within the database, but the user should also include other local sequences. 
-3. **`peroba_report`**: once the user finishes the analysis (i.e. has a phylogenetic tree using suggestions from
+4. **`peroba_report`**: once the user finishes the analysis (i.e. has a phylogenetic tree using suggestions from
    `peroba_backbone`), this script will estimate ancestral states and generate a PDF report.
 
 ## Installation

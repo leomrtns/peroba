@@ -188,7 +188,7 @@ class PerobaBackbone:
             self.g_csv = common.df_merge_metadata_by_index (csv, self.g_csv) 
         return
 
-    def trim_sequences (self, trim = True):  
+    def trim_sequences_and_format_columns (self, trim = True):  
         if trim is True: trim = [265, 29675]
         if trim[0] < 1: trim[0] = 1
         if trim[1] > 29902: trim[1] = 29902 # genome size is 29903
@@ -199,9 +199,21 @@ class PerobaBackbone:
         if self.l_seq is not None:  # usually this is None since we trim _before_ splitting 
             for x in self.l_seq.values():
                 x.seq = x.seq[trim[0]:trim[1]]
+        ## equiv to sort_categories() in peroba_subsample
+        df = self.csv
+        if "adm2" in df.columns:
+            df["adm2"] = df["adm2"].replace(["Unknown Source","Unknown", np.nan],"")
+            df["adm2"] = df["adm2"].replace({"Greater London":"Greater_London", "Hertfordshire":"Herefordshire"})
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col])
+        for col in fill_missing_cols:
+            if col in df.columns:
+                df[col].fillna ("", inplace = True) 
+        self.csv = df
 
     def finalise_and_split_data_sequences (self, trim = True, strict = False):
-        self.trim_sequences(trim=trim)
+        self.trim_sequences_and_format_columns (trim=trim)
         logger.info("Finding SNPs to speed up calculations")
         snp_aln = snpsites_from_alignment ([x for x in self.g_seq.values()], strict=strict)
         logger.info("In total %s SNPs were found (i,e, alignment size)", len(snp_aln[0].seq))
@@ -299,28 +311,28 @@ class PerobaBackbone:
         logger.info("After removal, local data has %s samples.", self.l_csv.shape[0])
 
     def find_neighbours_ball (self, blocks = 1500, leaf_size = 400, dist_blocks = 3, nn = 5, exclude = None):
-        logger.info(f"Finding neighbours to local sequences, using a distance of {dist_blocks} to {blocks} segments")
-        # search only amongst sequences with lineage (notice that sort_categories() replaces null by "")
+        logger.info(f"First, find {nn} closest neighbours to {blocks} segments") 
+        # search only amongst sequences with lineage (notice that trim_seqeunces_and_sort_cols() replaces null by "")
         target = self.g_csv.loc[(self.g_csv["lineage"] != ""), "sequence_name"].tolist()
         tmp1 = sum(self.g_csv["lineage"] != "")
         if exclude is not None:
             target = [x for x in target if x not in exclude]
         g_seq = {x:self.g_snp[x] for x in target} 
-        neighbours1 = ml.list_r_neighbours (g_seq, self.l_snp, blocks, leaf_size, dist_blocks)
+        neighbours1 = ml.list_n_neighbours (g_seq, self.l_snp, blocks, leaf_size, nn)
        
         blocks = 2 * blocks; leaf_size = leaf_size/2
-        logger.info("Found %s neighbours; now will find %s closest neighbours to %s on %s segments", 
-                len(neighbours1), str(nn), "them" if len(neighbours1)>0 else "the queries", str(blocks))
-        if len(neighbours1) > 0:
+        logger.info("Found %s neighbours; now will find neighbours to %s on %s segments using an initial distance of %s", 
+                len(neighbours1), "them" if len(neighbours1) > 0 else "the queries", str(blocks), str(dist_blocks))
+        if len(neighbours1) > 0: ## can happen with distance based (r_neighbours), not with NN-based
             aln_d = {x:self.g_snp[x] for x in neighbours1} 
         else:
-            logger.warning ("No neighbours found within appropriate distance: using query sequences to find their nearest neighbours") 
+            logger.warning ("No neighbours found: using query sequences to find their nearest neighbours") 
             aln_d = self.l_snp
         # search amongst all sequences, not only those with lineage info
-        neighbours = ml.list_n_neighbours (self.g_snp, aln_d, blocks, leaf_size, nn)
+        neighbours = ml.list_r_neighbours (self.g_snp, aln_d, blocks, leaf_size, dist_blocks)  
         neighbours = list(set(neighbours + neighbours1))
         gc.collect() ## collect garbage
-        logger.info("Found %s neighbours through hashed nearest-neighbours", len(neighbours))
+        logger.info("Found in total %s neighbours through hashed nearest-neighbours", len(neighbours))
         return neighbours
 
     def find_neighbours_paf (self, blocks = 2000, leaf_size = 500, n_segments = 1, nn = 10, exclude = None):
@@ -342,7 +354,7 @@ class PerobaBackbone:
         df4 = self.g_csv.loc[ self.g_csv["sequence_name"].isin(neighbours1), "uk_lineage"]
         logger.debug("List of closest UK lineages:\n%s\n", "\n".join( df4["uk_lineage"].unique()))
 
-        logger.info("Found %s neighbours; now will find their %s closest neighbours on %s segments", 
+        logger.info("Found %s neighbours by mapping; now will find their %s closest neighbours on %s segments", 
                 len(neighbours1), str(nn), str(blocks))
         aln_d = {x:self.g_snp[x] for x in neighbours1}
         neighbours = ml.list_n_neighbours (g_seq, aln_d, blocks, leaf_size, nn)
@@ -359,7 +371,7 @@ class PerobaBackbone:
             n2 = self.find_neighbours_paf (blocks = 4000, leaf_size = 500, n_segments = 1, nn = 16, exclude = n1) 
         else: ## local (COGUK) mode
             n1 = self.find_neighbours_ball(blocks = 2000, leaf_size = 400, dist_blocks = 3, nn = 10) 
-            n2 = self.find_neighbours_paf (blocks = 3000, leaf_size = 500, n_segments = 1, nn = 8, exclude = n1) 
+            n2 = self.find_neighbours_paf (blocks = 3000, leaf_size = 500, n_segments = 1, nn = 16, exclude = n1) 
 
         if self.fast_mode_seqs is not False: # Add all remaining NORW sequences as _global_ 
             n1 = list(set(n1 + n2))
