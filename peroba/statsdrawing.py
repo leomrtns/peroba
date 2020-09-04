@@ -39,7 +39,11 @@ def generate_time_heatmap (df0, date_col = None, group_col = None, use_max = Tru
     ## see also df.pivot(a,b,c) which takes df with cols a,b,c and create axb matrix with c values
     df = df.groupby(["date","group"]).size().unstack() ## real one will use cluster_id, not adm 
 
-    idx = pd.date_range(df.index.min(),df.index.max(), freq="1D") # creates uniform interval
+    try:
+        idx = pd.date_range(df.index.min(),df.index.max(), freq="1D") # creates uniform interval
+    except:
+        idx = pd.date_range(end = pd.datetime.today(), periods=60, freq='1D') 
+
     df.fillna(0,inplace=True) ## otherwise nan is treated differently
     df = df.reindex(idx, fill_value = 0) # does not accept inplace
     ## df.asfreq('D') # simpler alternative to idx[] above, to interpolate df with regular ("D"aily) intervals

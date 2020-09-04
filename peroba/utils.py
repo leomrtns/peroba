@@ -1,5 +1,9 @@
 #!/usr/bin/env python
-from Bio import Seq, SeqIO, Align, AlignIO, Alphabet 
+from Bio import Seq, SeqIO, Align, AlignIO # Alphabet removed in 1.78 (Sept/2020)
+try:
+    from Bio.Alphabet.IUPAC import ambiguous_dna 
+except ImportError:
+    ambiguous_dna is None
 from Bio.SeqRecord import SeqRecord
 from Bio.Align import AlignInfo
 import numpy as np
@@ -201,7 +205,10 @@ def minimap2_align_seqs (sequences=None, infile = None, reference_file = None, p
                 ind += e_len
         if seq_len < len(ref_seq):
             this_sequence += '-' * (len(ref_seq)-seq_len) # write gaps after alignment
-        align.append (SeqRecord(Seq.Seq(this_sequence,Alphabet.IUPAC.ambiguous_dna), id=this_sequence_name, description=this_sequence_name))
+        if ambiguous_dna: ## biopython < 1.78
+            align.append (SeqRecord(Seq.Seq(this_sequence,ambiguous_dna), id=this_sequence_name, description=this_sequence_name))
+        else: # biopython >= 1.78
+            align.append (SeqRecord(Seq.Seq(this_sequence), id=this_sequence_name, description=this_sequence_name))
      
     if infile is None:
         os.system(f"rm -f {ifl}")
@@ -318,7 +325,10 @@ def improve_tree_from_align (tree, align, if_tre = None, of_tre = None, a_file =
 iupac_dna = {''.join(sorted(v)):k for k,v in Seq.IUPAC.IUPACData.ambiguous_dna_values.items()}
 
 def consensus_from_alignment (align): ## IUPAC ambiguity codes
-    xaln = [SeqRecord(Seq.Seq(str(rec.seq).replace("-","N") ,Alphabet.IUPAC.ambiguous_dna), id=rec.id, description=rec.description) for rec in align]
+    if ambiguous_dna: ## biopython < 1.78
+        xaln = [SeqRecord(Seq.Seq(str(rec.seq).replace("-","N"), ambiguous_dna), id=rec.id, description=rec.description) for rec in align]
+    else:
+        xaln = [SeqRecord(Seq.Seq(str(rec.seq).replace("-","N")), id=rec.id, description=rec.description) for rec in align]
     summary_align = AlignInfo.SummaryInfo(Align.MultipleSeqAlignment(xaln)) # must be an MSA, not a list
     pssm = summary_align.pos_specific_score_matrix(chars_to_ignore=["-"])
     consensus = [];
@@ -327,7 +337,10 @@ def consensus_from_alignment (align): ## IUPAC ambiguity codes
         # base can be "R", then iupac.dna_values[R] = [A,G]
         acgt_list = [x for base, count in score.items() for x in Seq.IUPAC.IUPACData.ambiguous_dna_values[base] if count > 0]
         consensus.append(iupac_dna[ ''.join(sorted(set(acgt_list))) ])
-    return Seq.Seq(''.join(consensus),Alphabet.IUPAC.ambiguous_dna)
+    if ambiguous_dna:
+        return Seq.Seq(''.join(consensus),ambiguous_dna)
+    else:
+        return Seq.Seq(''.join(consensus))
 # profile could be [[x]*count for base,count...] with collection; or dict{A:0, C:0, ...} with dict[base]+=count
 
 def sorted_uncertainty_from_alignment (align, max_freq_n = 0.1): ## IUPAC ambiguity codes

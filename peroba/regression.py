@@ -3,7 +3,7 @@
 from peroba.utils import *
 import logging, ete3, argparse
 import numpy as np
-from Bio import Seq, SeqIO, Align, AlignIO, Phylo, Alphabet, pairwise2
+from Bio import Seq, SeqIO, Align, AlignIO, Phylo, pairwise2   # Alphabet removed in 1.78 (Sept/2020) 
 import time, codecs, random
 from sklearn.neighbors import NearestNeighbors, BallTree ## KDTree does NOT accept hamming
 from sklearn.cluster import OPTICS
