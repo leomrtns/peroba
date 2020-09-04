@@ -352,7 +352,9 @@ class PerobaBackbone:
         neighbours1 = ml.list_paf_neighbours (g_seq, l_seq, n_segments = n_segments, n_best = 20, n_threads = 2)
         
         df4 = self.g_csv.loc[ self.g_csv["sequence_name"].isin(neighbours1), "uk_lineage"]
-        logger.debug("List of closest UK lineages:\n%s\n", "\n".join( df4["uk_lineage"].unique()))
+        df4 = collections.Counter(df4).most_common(50)
+        df4 = "\n".join([str(y[0])+":\t"+str(y[1]) for y in df4])
+        logger.info("List of closest UK lineages (with frequency counts):\n%s\n", df4)
 
         logger.info("Found %s neighbours by mapping; now will find their %s closest neighbours on %s segments", 
                 len(neighbours1), str(nn), str(blocks))
