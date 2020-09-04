@@ -200,7 +200,7 @@ class PerobaBackbone:
             for x in self.l_seq.values():
                 x.seq = x.seq[trim[0]:trim[1]]
         ## equiv to sort_categories() in peroba_subsample
-        df = self.csv
+        df = self.g_csv
         if "adm2" in df.columns:
             df["adm2"] = df["adm2"].replace(["Unknown Source","Unknown", np.nan],"")
             df["adm2"] = df["adm2"].replace({"Greater London":"Greater_London", "Hertfordshire":"Herefordshire"})
@@ -210,7 +210,7 @@ class PerobaBackbone:
         for col in fill_missing_cols:
             if col in df.columns:
                 df[col].fillna ("", inplace = True) 
-        self.csv = df
+        self.g_csv = df
 
     def finalise_and_split_data_sequences (self, trim = True, strict = False):
         self.trim_sequences_and_format_columns (trim=trim)
