@@ -182,7 +182,7 @@ class PerobaSubsample:
     
     def reduce_redundancy (self, extended_mode, new_col_name):
         clade_rule = [ # rules can be repeated, for different thresholds; some samples fall into several 
-                ["lineage",   10, 50], # only those with >1 samples; then take up to 50
+                ["lineage",   10, 50], # only those with >10 samples; then take up to 50
                 ["lineage",   40, 1000], # only those with >20 samples; then take up to 1000 
                 ["adm1",      10, 200],
                 ["adm2",       5, 100],
@@ -193,7 +193,7 @@ class PerobaSubsample:
                 ["del_lineage", 1, 10]
                 ]
         missing_rule = [ ## for samples without this information, we keep the top ones 
-                ["lineage",    50], 
+                ["lineage",    10], 
                 ["uk_lineage", 500], 
                 ["phylotype",  500], 
                 ["acc_lineage", 1000], 

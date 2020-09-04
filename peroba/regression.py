@@ -47,11 +47,11 @@ def list_r_neighbours (g_seq, l_seq, blocks = 1000, leaf_size = 500, dist_blocks
     l_hash = [[xxhash.xxh32(str(l_aln[j].seq[i:i+block_size])).intdigest() for i in range(0,genome_size,block_size)] for j in range(len(l_aln))]
     clusters = []
     n_iter = 0
-    while len(clusters) < 1 and n_iter < 6:
+    while len(clusters) < 1 and n_iter < 10:
         logger.info("Iter {}: trying to find neighbours with distance smaller than {:.6f}".format(n_iter, radius))
         idx = btre.query_radius(l_hash, r=radius, return_distance=False) # gives global neighbours to each local sequence; return_distance is expensive
         clusters = list(set([g_aln[j].id for x in idx for j in x])) # one-dimentional list of all global neighbours
-        radius = radius * 2; 
+        radius = radius * 1.4; 
         n_iter += 1;
     if (len(clusters) < 1):
         logger.warning ("Could not find neighours close enough;")
@@ -77,7 +77,7 @@ def list_n_neighbours (g_seq, l_seq, blocks = 1000, leaf_size = 200, nn = 10):
     del g_aln, g_hash, l_aln, l_hash, btre, idx
     return clusters
 
-def list_paf_neighbours (g_seq, l_seq, n_segments = 1, n_best = 10, n_threads = 2): # nthreads increase peak memory 
+def list_paf_neighbours (g_seq, l_seq, n_segments = 1, n_best = 20, n_threads = 2): # nthreads increase peak memory 
     if n_segments > 10: n_segments = 10
     if n_segments < 1:  n_segments = 1
     g_aln = [x for x in g_seq.values()] # calling function is faster if working with dictionary than list (alignment)

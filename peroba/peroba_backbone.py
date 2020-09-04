@@ -73,14 +73,17 @@ class PerobaBackbone:
         self.extended_mode = global_level
         if self.extended_mode == 0:
             logger.info("Assuming all sequences are from NORW/COGUK (subsampling will be UK-centric)")
-            subs = subs.loc[ (subs["peroba_level_0"] > 0) & (subs["peroba_pda_95"] > 0) ]
+            #subs = subs.loc[ (subs["peroba_level_0"] > 0) & (subs["peroba_pda_95"] > 0) ]
+            subs = subs.loc[ (subs["peroba_level_0"] > 0) ]
         elif self.extended_mode == 1:
             logger.info("Extended (global) mode: will use more GISAID data, with settings similar to the classic (COGUK) search")
-            subs = subs.loc[ (subs["peroba_level_1"] > 0) & (subs["peroba_pda_95"] > 0) ]
+            #subs = subs.loc[ (subs["peroba_level_1"] > 0) & (subs["peroba_pda_95"] > 0) ]
+            subs = subs.loc[ (subs["peroba_level_1"] > 0) ]
         else:
             self.extended_mode = 2
             logger.info("Extended (global) mode: will use more GISAID data and perform a broader search")
-            subs = subs.loc[ (subs["peroba_level_2"] > 0) & (subs["peroba_pda_75"] > 0) ]
+            #subs = subs.loc[ (subs["peroba_level_2"] > 0) & (subs["peroba_pda_75"] > 0) ]
+            subs = subs.loc[ (subs["peroba_level_2"] > 0) ]
 
         sel_samples = subs.index.tolist()
         if (self.fast_mode_seqs is False): ## must keep NORW sequences
@@ -334,8 +337,11 @@ class PerobaBackbone:
             target = [x for x in target if x not in exclude]
         l_seq = {x:self.l_snp[x] for x in query}  # only local sequences still without uk_lineage
         g_seq = {x:self.g_snp[x] for x in target} # search only amongst those with uk_lineage
-        neighbours1 = ml.list_paf_neighbours (g_seq, l_seq, n_segments = n_segments, n_threads = 2)
-       
+        neighbours1 = ml.list_paf_neighbours (g_seq, l_seq, n_segments = n_segments, n_best = 20, n_threads = 2)
+        
+        df4 = self.g_csv.loc[ self.g_csv["sequence_name"].isin(neighbours1), "uk_lineage"]
+        logger.debug("List of closest UK lineages:\n%s\n", "\n".join( df4["uk_lineage"].unique()))
+
         logger.info("Found %s neighbours; now will find their %s closest neighbours on %s segments", 
                 len(neighbours1), str(nn), str(blocks))
         aln_d = {x:self.g_snp[x] for x in neighbours1}
@@ -346,14 +352,14 @@ class PerobaBackbone:
 
     def find_neighbours (self):
         if self.extended_mode == 2:
-            n1 = self.find_neighbours_ball(blocks = 2000, leaf_size = 400, dist_blocks = 5, nn = 20) 
-            n2 = self.find_neighbours_paf (blocks = 4000, leaf_size = 500, n_segments = 2, nn = 30, exclude = n1) 
+            n1 = self.find_neighbours_ball(blocks = 3000, leaf_size = 400, dist_blocks = 5, nn = 10) 
+            n2 = self.find_neighbours_paf (blocks = 5000, leaf_size = 500, n_segments = 2, nn = 24, exclude = n1) 
         elif self.extended_mode == 1:
-            n1 = self.find_neighbours_ball(blocks = 2000, leaf_size = 400, dist_blocks = 4, nn = 20) 
-            n2 = self.find_neighbours_paf (blocks = 3000, leaf_size = 500, n_segments = 1, nn = 20, exclude = n1) 
+            n1 = self.find_neighbours_ball(blocks = 3000, leaf_size = 400, dist_blocks = 4, nn = 10) 
+            n2 = self.find_neighbours_paf (blocks = 4000, leaf_size = 500, n_segments = 1, nn = 16, exclude = n1) 
         else: ## local (COGUK) mode
-            n1 = self.find_neighbours_ball(blocks = 1500, leaf_size = 400, dist_blocks = 3, nn = 5) 
-            n2 = self.find_neighbours_paf (blocks = 2000, leaf_size = 500, n_segments = 1, nn = 10, exclude = n1) 
+            n1 = self.find_neighbours_ball(blocks = 2000, leaf_size = 400, dist_blocks = 3, nn = 10) 
+            n2 = self.find_neighbours_paf (blocks = 3000, leaf_size = 500, n_segments = 1, nn = 8, exclude = n1) 
 
         if self.fast_mode_seqs is not False: # Add all remaining NORW sequences as _global_ 
             n1 = list(set(n1 + n2))

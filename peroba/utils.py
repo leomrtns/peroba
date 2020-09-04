@@ -261,7 +261,7 @@ def pda_tree_from_tree (tree, infile = None, outfile = None, prefix = "/tmp/", n
     else:
         tree.write(format=1, outfile=ifl)
     n_remain = str(n_remain)
-    runstr = f"iqtree2 -t {ifl} -k {n_remain}; tail -n 6 {ifl}.pda | head -1 > {ofl}"
+    runstr = f"iqtree -t {ifl} -k {n_remain}; tail -n 6 {ifl}.pda | head -1 > {ofl}"
     proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)    
     treestring = open(ofl).readline().rstrip().replace("\'","").replace("\"","").replace("[&R]","")
     tree_out = ete3.Tree (treestring)# FIXME: why ete3?
@@ -279,7 +279,7 @@ def pda_names_from_tree (tree, infile = None, prefix = "/tmp/", n_remain = 500):
         tree.write_tree_newick (ifl)
     else:
         tree.write(format=1, outfile=ifl)
-    runstr = f"iqtree2 -t {ifl} -k {n_remain}"
+    runstr = f"iqtree -t {ifl} -k {n_remain}"
     proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)    
     pda_table = [x.rstrip() for x in open(f"{ifl}.pda").readlines()]
     idx = [i for i,y in enumerate(pda_table) if "The optimal PD set has" in y][0] # line before seq names
