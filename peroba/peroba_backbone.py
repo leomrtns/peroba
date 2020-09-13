@@ -375,7 +375,8 @@ class PerobaBackbone:
             n1 = self.find_neighbours_ball(blocks = 2000, leaf_size = 400, dist_blocks = 3, nn = 10) 
             n2 = self.find_neighbours_paf (blocks = 3000, leaf_size = 500, n_segments = 1, nn = 16, exclude = n1) 
 
-        if self.fast_mode_seqs is not False: # Add all remaining NORW sequences as _global_ 
+        # Add all remaining NORW sequences as _global_ (but only if extended_mode==0 which means we are in the UK) 
+        if self.fast_mode_seqs is not False and self.extended_mode < 1: 
             n1 = list(set(n1 + n2))
             n2 = self.g_csv.loc[(self.g_csv["submission_org_code"].str.contains("NORW", na=False)), "sequence_name"].tolist()
         return list(set(n1 + n2))

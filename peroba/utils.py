@@ -3,9 +3,10 @@ from Bio import Seq, SeqIO, Align, AlignIO # Alphabet removed in 1.78 (Sept/2020
 try:
     from Bio.Alphabet.IUPAC import ambiguous_dna 
 except ImportError:
-    ambiguous_dna is None
+    ambiguous_dna = None
 from Bio.SeqRecord import SeqRecord
 from Bio.Align import AlignInfo
+from Bio.Data import IUPACData ## > 1.78 location of ambiguous_dna_values etc
 import numpy as np
 import treeswift, datetime, sys, gzip, lzma, bz2, re, subprocess, os, itertools, ete3, collections, logging
 
@@ -322,7 +323,9 @@ def improve_tree_from_align (tree, align, if_tre = None, of_tre = None, a_file =
 #    if of_tre is None: os.system(f"rm -f {ofl}")
     return tree_out
 
-iupac_dna = {''.join(sorted(v)):k for k,v in Seq.IUPAC.IUPACData.ambiguous_dna_values.items()}
+## > 1.78 replaced Seq.Seq.IUPAC.IUPACData for Bio.Data.IUPACData
+#iupac_dna = {''.join(sorted(v)):k for k,v in Seq.IUPAC.IUPACData.ambiguous_dna_values.items()}
+iupac_dna = {''.join(sorted(v)):k for k,v in IUPACData.ambiguous_dna_values.items()}
 
 def consensus_from_alignment (align): ## IUPAC ambiguity codes
     if ambiguous_dna: ## biopython < 1.78
@@ -335,7 +338,7 @@ def consensus_from_alignment (align): ## IUPAC ambiguity codes
     # pssm example: {'-':3, 'A':0, 'T':4.0, 'G':0, 'C':2.0, 'N':1} per column, means 3 seqs have "-", 4 have "T"...
     for score in pssm: # we don't care about frequency, only presence
         # base can be "R", then iupac.dna_values[R] = [A,G]
-        acgt_list = [x for base, count in score.items() for x in Seq.IUPAC.IUPACData.ambiguous_dna_values[base] if count > 0]
+        acgt_list = [x for base, count in score.items() for x in IUPACData.ambiguous_dna_values[base] if count > 0]
         consensus.append(iupac_dna[ ''.join(sorted(set(acgt_list))) ])
     if ambiguous_dna:
         return Seq.Seq(''.join(consensus),ambiguous_dna)
@@ -366,7 +369,7 @@ def distance_from_consensus (query, consensus):
             counter += 1
             if s1 != s2:
                 d1 += 1 ## any difference
-                l = len(set(Seq.IUPAC.IUPACData.ambiguous_dna_values[s1]).intersection(Seq.IUPAC.IUPACData.ambiguous_dna_values[s2]))
+                l = len(set(IUPACData.ambiguous_dna_values[s1]).intersection(IUPACData.ambiguous_dna_values[s2]))
                 if (l == 0): ## incompatible (e.g. W and A are compatible b/c W = A or T)
                     d2 +=1
     return [d1/counter, d2/counter] ## or return 3 values
