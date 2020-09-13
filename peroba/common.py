@@ -222,6 +222,12 @@ def df_read_genome_metadata (filename, primary_key = "sequence_name", sep=',', i
     else:
         df1.set_index (str(index_name), drop = True, inplace = True) # drop the column to avoid having both with same name
     
+   
+    if "clean_date" in df1.columns: # 2020.09.10: replaces collection_date in master local table
+        if "collection_date" in df1.columns: ## keep most recent first (in case one has wrong date)
+            df.drop (labels = ["collection_date"], axis=1, inplace = True)
+        df.rename(columns={"clean_date":"collection_date"}, inplace=True)
+
     if "collection_date" in df1.columns: ## keep most recent first (in case one has wrong date)
         df1.sort_values(by=["collection_date"], inplace = True, ascending=False)
     
