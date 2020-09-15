@@ -349,13 +349,14 @@ class PerobaBackbone:
             target = [x for x in target if x not in exclude]
         l_seq = {x:self.l_snp[x] for x in query}  # only local sequences still without uk_lineage
         g_seq = {x:self.g_snp[x] for x in target} # search only amongst those with uk_lineage
-        neighbours1 = ml.list_paf_neighbours (g_seq, l_seq, n_segments = n_segments, n_best = 20, n_threads = 2)
+        neighbours1 = ml.list_paf_neighbours (g_seq, l_seq, n_segments = n_segments, n_best = nn, n_threads = 2)
         
         df4 = self.g_csv.loc[ self.g_csv["sequence_name"].isin(neighbours1), "uk_lineage"]
         df4 = collections.Counter(df4).most_common(50)
         df4 = "\n".join([str(y[0])+":\t"+str(y[1]) for y in df4])
         logger.info("List of closest UK lineages (with frequency counts):\n%s\n", df4)
 
+        nn = int (nn/2)
         logger.info("Found %s neighbours by mapping; now will find their %s closest neighbours on %s segments", 
                 len(neighbours1), str(nn), str(blocks))
         aln_d = {x:self.g_snp[x] for x in neighbours1}
@@ -366,14 +367,14 @@ class PerobaBackbone:
 
     def find_neighbours (self):
         if self.extended_mode == 2:
-            n1 = self.find_neighbours_ball(blocks = 3000, leaf_size = 400, dist_blocks = 5, nn = 10) 
-            n2 = self.find_neighbours_paf (blocks = 5000, leaf_size = 500, n_segments = 2, nn = 24, exclude = n1) 
+            n1 = self.find_neighbours_ball(blocks = 2000, leaf_size = 400, dist_blocks = 2, nn = 8) 
+            n2 = self.find_neighbours_paf (blocks = 2500, leaf_size = 500, n_segments = 1, nn = 8, exclude = n1) 
         elif self.extended_mode == 1:
-            n1 = self.find_neighbours_ball(blocks = 3000, leaf_size = 400, dist_blocks = 4, nn = 10) 
-            n2 = self.find_neighbours_paf (blocks = 4000, leaf_size = 500, n_segments = 1, nn = 16, exclude = n1) 
+            n1 = self.find_neighbours_ball(blocks = 2000, leaf_size = 400, dist_blocks = 1, nn = 8) 
+            n2 = self.find_neighbours_paf (blocks = 1500, leaf_size = 500, n_segments = 1, nn = 6, exclude = n1) 
         else: ## local (COGUK) mode
-            n1 = self.find_neighbours_ball(blocks = 2000, leaf_size = 400, dist_blocks = 3, nn = 10) 
-            n2 = self.find_neighbours_paf (blocks = 3000, leaf_size = 500, n_segments = 1, nn = 16, exclude = n1) 
+            n1 = self.find_neighbours_ball(blocks = 1500, leaf_size = 400, dist_blocks = 1, nn = 8) 
+            n2 = self.find_neighbours_paf (blocks = 1000, leaf_size = 500, n_segments = 1, nn = 4, exclude = n1) 
 
         # Add all remaining NORW sequences as _global_ (but only if extended_mode==0 which means we are in the UK) 
         if self.fast_mode_seqs is not False and self.extended_mode < 1: 

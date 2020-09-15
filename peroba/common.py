@@ -57,7 +57,7 @@ dtype_numeric_cols = [
         "peroba_level_0", "peroba_level_1", "peroba_level_2", "peroba_pda_50", "peroba_pda_75", "peroba_pda_95", "peroba_subsample"]
 
 dtype_datetime_cols = ["date_submitted", "collection_date", "received_date", "sequencing_submission_date", "start_time",
-      "date_sequenced"] # from NORW metadata
+      "date_sequenced", "clean_date"] # from NORW metadata
 # "Sequencing date" is coded (20200516) but not equal to "date_sequenced" 
 
 ## true false Basic QC , High Quality QC,
@@ -225,8 +225,8 @@ def df_read_genome_metadata (filename, primary_key = "sequence_name", sep=',', i
    
     if "clean_date" in df1.columns: # 2020.09.10: replaces collection_date in master local table
         if "collection_date" in df1.columns: ## keep most recent first (in case one has wrong date)
-            df.drop (labels = ["collection_date"], axis=1, inplace = True)
-        df.rename(columns={"clean_date":"collection_date"}, inplace=True)
+            df1.drop (labels = ["collection_date"], axis=1, inplace = True)
+        df1.rename(columns={"clean_date":"collection_date"}, inplace=True)
 
     if "collection_date" in df1.columns: ## keep most recent first (in case one has wrong date)
         df1.sort_values(by=["collection_date"], inplace = True, ascending=False)
