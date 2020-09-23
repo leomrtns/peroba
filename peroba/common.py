@@ -14,7 +14,7 @@ import logging, ete3
 import numpy as np, pandas as pd
 from Bio import Seq, SeqIO
 import random, datetime, sys, lzma, gzip, bz2, re, glob, collections, subprocess, itertools, pathlib, base64
-import pandas_profiling # ProfileReport
+#import pandas_profiling # ProfileReport
 from peroba.utils import * 
 
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow

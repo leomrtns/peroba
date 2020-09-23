@@ -11,7 +11,7 @@ from matplotlib import rcParams, cm, colors # colormap
 from pastml.acr import acr
 import logging, ete3, argparse
 import numpy as np, pandas as pd, seaborn as sns
-from skearn import manifold, metrics, cluster, neighbors, decomposition, preprocessing
+from sklearn import manifold, metrics, cluster, neighbors, decomposition, preprocessing
 import sys, gzip, bz2, re, glob, pickle, collections, subprocess, errno, random, itertools, pathlib
 
 

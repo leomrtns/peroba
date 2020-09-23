@@ -33,13 +33,25 @@ def md_html_table (df):
     dfc = df[cols]
     return "\n\n" + dfc.to_markdown(tablefmt="pipe") + "\n\n"
 
-def plot_over_clusters (metadata, tree, output_dir=None, figdir=None, pdf_report_name = None, extended_mode = 0):
+    
+def estimate_lineages_and_subtrees (metadata, csv, tree, meta_file_name, csv_file_name, extended_mode):
+    df = metadata.copy()
+    # df will be metadata with extra peroba_ columns (and sub_df is for each subtree)
+    sub_df, sub_tree, md_description, df = phylo.ASR_subtrees (df, tree, extended_mode = extended_mode)
+    logger.info ("Saving metadata files with estimated lineages")
+    df = remove_imputation_from_gisaid (df) # uk_lineages from Australia samples...
+    df.to_csv (meta_file_name)
+    csv = merge_original_with_extra_cols (csv, df)
+    csv.to_csv (csv_file_name)
+    return [df, tree, sub_df, sub_tree, md_description]
+
+def plot_over_clusters (asr_data, output_dir=None, figdir=None, pdf_report_name = None, extended_mode = 0):
     if output_dir is None: output_dir = cwd
     if extended_mode == 0: min_cluster_size = 5
     elif extended_mode == 1: min_cluster_size = 1
     else: min_cluster_size = 0
 
-    df = metadata.copy()
+    [df, tree, sub_df, sub_tree, md_description] = asr_data
 
     md_description = """
 ## Phylogenetic clusters\n
@@ -54,14 +66,11 @@ for instance) but our method will impute a lineage/phylotype to it nonetheless.
 """.format (minc_size = min_cluster_size)
     html_desc = pdf_desc = md_description 
 
-    # df will be metadata with extra peroba_ columns (and sub_df is for each subtree)
-    sub_df, sub_tree, md_description, df = phylo.ASR_subtrees (df, tree, extended_mode = extended_mode)
     html_desc += md_description # same text in markdown
     pdf_desc  += md_description
 
     logger.info("Decorating tree before plotting all clusters")
-    df_clean = remove_imputation_from_gisaid (df) # remove imputations where it doens't make sense (uk_lineage from China)
-    colmap_dict = phylo.colormap_from_dataframe (df_clean)
+    colmap_dict = phylo.colormap_from_dataframe (df)
     ts = phylo.return_treestyle_with_columns (colmap_dict)
 
     logger.info("Entering loop over clusters found; sit tight!")
@@ -270,16 +279,13 @@ def main_prepare_report_files (metadata0, csv0, tree, tree_leaves, input_dir, ou
 
     ## prepare data (merging, renaming) csv0 will be modified to remove columns from prev week
     metadata, csv, tree, tree_leaves = merge_metadata_with_csv (metadata0, csv0, tree, tree_leaves)
+    ## generate ancestral states, save metadata+csv
+    asr_data = estimate_lineages_and_subtrees (metadata, csv, tree, meta_file_name, csv_file_name, extended_mode)
     ## start plotting (metadata will receive peroba_ imputed values) 
-    html_desc, pdf_desc, metadata = plot_over_clusters (metadata, tree, output_dir=output_dir, 
+    html_desc, pdf_desc, metadata = plot_over_clusters (asr_data, output_dir=output_dir, 
             figdir=figdir, pdf_report_name = pdfreportname, extended_mode=extended_mode)
     fw_htm.write(html_desc)
     fw_pdf.write(pdf_desc)
-
-    metadata = remove_imputation_from_gisaid (metadata) # uk_lineages from Australia samples...
-    metadata.to_csv (meta_file_name)
-    csv = merge_original_with_extra_cols (csv, metadata)
-    csv.to_csv (csv_file_name)
 
     if extended_mode == 0:
         html_desc, pdf_desc = stdraw.plot_jitter_lineages (metadata, output_dir, figdir)
