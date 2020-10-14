@@ -1,4 +1,4 @@
-name: peroba 
+name: perobadb 
 channels:
   - conda-forge
   - bioconda
