@@ -51,7 +51,7 @@ class PerobaDatabase:
             desc = "perobaDB merged metadata information {}".format(datetime.datetime.now().strftime("%Y-%m-%d"))
             fname = self.prefix + ".html"
             logger.info(f"Generating an HTML report of metadata variables in {fname}")
-            common.metadata_to_html (self.metadata, fname, desc) 
+            # common.metadata_to_html (self.metadata, fname, desc) 
 
         else:
             logger.warning("Metadata missing: this won't be a valid database")

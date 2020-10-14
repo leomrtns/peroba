@@ -44,16 +44,16 @@ setuptools.setup(
     install_requires=[
            'biopython >= 1.70',
            'ete3',
-           'pastml',
+           #'pastml',
            'numpy',
            'matplotlib',
            'pandas',
-           'seaborn',
-           'basemap',
-           'geopandas',
+           #'seaborn',
+           #'basemap',
+           #'geopandas',
            'treeswift',
            'xxhash',
-           'pandas_profiling',
+           #'pandas_profiling',
            'scikit-learn'
        ],
     classifiers = [
