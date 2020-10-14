@@ -13,6 +13,7 @@ dependencies:
   - treeswift
   - ete3
   - python-xxhash
+  - mafft>7.467
   - xz
   - pip:
     - .  # this means run pip on this directory's setup.py 

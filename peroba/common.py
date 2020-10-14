@@ -167,8 +167,9 @@ def replace_values_metadata (df0):
     if "adm2" in df.columns:
         df['adm2'] = df['adm2'].str.title()
         df["adm2"] = df["adm2"].replace(["Unknown Source","Unknown"],"")
-        df["adm2"] = df["adm2"].replace({"Greater_London":"Greater London"}) # "Hertfordshire" != "Herefordshire"
-        df['adm2'] = df['adm2'].map(lambda x: x if x == "Norfolk" else "code" + xxhash.xxh32(str(x)).hexdigest()[:3]) ## no ADM2 leaves the servers
+        #df["adm2"] = df["adm2"].replace({"Greater_London":"Greater London"}) # "Hertfordshire" != "Herefordshire"
+        df["adm2"] = df["adm2"].replace(["Greater_London"], "Greater London") # "Hertfordshire" != "Herefordshire"
+        df['adm2'] = df['adm2'].map(lambda x: x if str(x) == "Norfolk" else "code" + str(xxhash.xxh32(str(x)).hexdigest()[:3])) ## no ADM2 leaves the servers
         #df['adm2'].fillna(df.country, inplace=True)
     if "is_icu_patient" in df.columns:
         df["is_icu_patient"] = df["is_icu_patient"].str.replace("Unknown","?")
