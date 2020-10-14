@@ -1,0 +1,19 @@
+name: peroba 
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python>3.6
+  - pandas
+  - pip
+  - biopython>1.68
+  - scikit-bio 
+  - scikit-learn 
+  - treeswift
+  - ete3
+  - python-xxhash
+  - xz
+  - pip:
+    - .  # this means run pip on this directory's setup.py 
+    - pytools==2020.1

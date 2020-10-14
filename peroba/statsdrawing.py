@@ -435,7 +435,8 @@ def plot_postcode_map (metadata, counter, output_dir, figdir):
     hdesc1 = f"![]({fname})"
     fig.clf()
 
-    caption2, hdesc2, pdesc = plot_adm2_map (metadata, counter, output_dir, figdir)
+    #caption2, hdesc2, pdesc = plot_adm2_map (metadata, counter, output_dir, figdir)
+    caption2 = hdesc2 = pdesc = " " # no plot of ADM2 
     pdf_desc  += pdesc
     html_desc  = f"\n\n| {caption} | {caption2} |\n|-------|--------|\n|{hdesc1}|{hdesc2}|\n\n"
     return html_desc, pdf_desc 

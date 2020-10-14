@@ -1,21 +1,28 @@
 import os
 os.environ['QT_QPA_PLATFORM']='offscreen'
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from matplotlib import rcParams, cm, colors, patches
+import logging, xxhash
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib import rcParams, cm, colors, patches
+except ImportError:
+    logger.warning("matplotlib module missing; I'll try to live without it")
 
 ## nabil's needed columns: peroba_uk_lineage  peroba_lineage peroba_phylotype  peroba_special_lineage central_sample_id
 ## TODO: "UNKNOWN SOURCE" and "UNKNOWN" are the same adm2 (in cog) (fixed in backbone)
-## TODO: columns w/ values in csv but not metadata (e.g. adm_private or this week's) may not ASreconstructed
+## TODO: columns w/ values in csv but not metadata (e.g. adm_private or this week's) may not be reconstructed
 ## (not merged?)
 
-import logging, ete3
+import ete3
 import numpy as np, pandas as pd
 from Bio import Seq, SeqIO
 import random, datetime, sys, lzma, gzip, bz2, re, glob, collections, subprocess, itertools, pathlib, base64
-import pandas_profiling # ProfileReport
 from peroba.utils import * 
+try:
+    import pandas_profiling # ProfileReport
+except ImportError:
+    logger.warning("pandas_profiling module missing; no HTML description will be produced")
 
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False
@@ -63,6 +70,10 @@ dtype_datetime_cols = ["date_submitted", "collection_date", "received_date", "se
 ## true false Basic QC , High Quality QC,
     
 def metadata_to_html (df0, filename, description):
+    try:
+        import pandas_profiling # ProfileReport
+    except ImportError:
+        return 
     df = set_dtypes_metadata (df0)
     df.dropna  (axis=1, how='all', inplace=True) # delete empty columns
     covrge = "Coverage (X)" ## must remove ending X (e.g. 2000X)
@@ -157,6 +168,7 @@ def replace_values_metadata (df0):
         df['adm2'] = df['adm2'].str.title()
         df["adm2"] = df["adm2"].replace(["Unknown Source","Unknown"],"")
         df["adm2"] = df["adm2"].replace({"Greater_London":"Greater London"}) # "Hertfordshire" != "Herefordshire"
+        df['adm2'] = df['adm2'].map(lambda x: x if x == "Norfolk" else "code" + xxhash.xxh32(x).hexdigest()[:3]) ## no ADM2 leaves the servers
         #df['adm2'].fillna(df.country, inplace=True)
     if "is_icu_patient" in df.columns:
         df["is_icu_patient"] = df["is_icu_patient"].str.replace("Unknown","?")
@@ -248,7 +260,8 @@ def df_finalise_metadata (df, exclude_na_rows = False, exclude_columns = False, 
     ''' if exclude_na_rows is the string "default" then we use sensible choices
     '''
     if exclude_na_rows == "default":
-        exclude_na_rows = ['collection_date','sequence_name','lineage', 'adm2']
+        #exclude_na_rows = ['collection_date','sequence_name','lineage', 'adm2']
+        exclude_na_rows = ['collection_date','sequence_name','lineage']
     if exclude_columns == "default":
         exclude_columns = ["is_travel_history","is_surveillance","is_hcw", "is_community", "outer_postcode", "travel_history"]
 

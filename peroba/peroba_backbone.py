@@ -201,9 +201,9 @@ class PerobaBackbone:
                 x.seq = x.seq[trim[0]:trim[1]]
         ## equiv to sort_categories() in peroba_subsample
         df = self.g_csv
-        if "adm2" in df.columns:
-            df["adm2"] = df["adm2"].replace(["Unknown Source","Unknown", np.nan],"")
-            df["adm2"] = df["adm2"].replace({"Greater London":"Greater_London", "Hertfordshire":"Herefordshire"})
+        #if "adm2" in df.columns: 
+        #    df["adm2"] = df["adm2"].replace(["Unknown Source","Unknown", np.nan],"")
+        #    df["adm2"] = df["adm2"].replace({"Greater London":"Greater_London", "Hertfordshire":"Herefordshire"})
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col])
