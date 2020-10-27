@@ -15,6 +15,8 @@ dependencies:
   - python-xxhash
   - mafft>7.467
   - xz
+  - oauth2client
+  - gspread
   - pip:
     - .  # this means run pip on this directory's setup.py 
     - pytools==2020.1
