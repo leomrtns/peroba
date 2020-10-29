@@ -82,6 +82,7 @@ def update_peroba_sheet (credentials, merged_df):
     full_tab = full_tab.fillna("") # google doesnt like NaN but we do (for combine_first, for instance)
     sheet.update([full_tab.columns.values.tolist()] + full_tab.values.tolist())
 
+    return ## Currently DO NOT update other lists to avoid google limit
     # 2. get master sheet (and add index to combine_first() ) 
     master_tbl = pd.DataFrame(client.open("SARCOV2-Metadata").sheet1.get_all_records())
     master_tbl.set_index("central_sample_id", inplace=True)
@@ -117,7 +118,7 @@ def merge_civet_uvaia (civ_tab, ufile):
     uva_tab = uva_tab.merge(civ_tab, left_on="reference sequence", right_on="sequence_name", how="left")
     # update uva_tab with phylotype et al info
     uva_tab["acgt_distance"] = uva_tab["valid_sites"] - uva_tab["ACGT_matches"]
-    uva_tab["snp_distance"] = round (uva_tab["valid_sites"] * (1.0 - uva_tab["ACGT_matches"]),1)
+    uva_tab["snp_distance"] = round (uva_tab["valid_sites"] * (1.0 - uva_tab["prop_char_matches"]),1)
     for col in cols_in_fulltab:
         uva_tab[col].fillna("",inplace=True)
     # one row per new query sequence
@@ -173,7 +174,7 @@ def run_all ():
         uvaia (ref_wuhan, merged_fasta, uv_aln, civet_aln, uv_tbl)
         merged_df = merge_civet_uvaia (civ_table, uv_tbl)
     merged_df = update_merged_civet (merged_df, civ_table, merged_tbl_filename, old_names)
-    #update_peroba_sheet (google_credentials, merged_df)
+    update_peroba_sheet (google_credentials, merged_df)
     # only save dump if everything went smooth
     pickle.dump (recent_nc_files, open(recent_secret, "wb"))
 
