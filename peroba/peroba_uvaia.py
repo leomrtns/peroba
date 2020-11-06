@@ -59,11 +59,14 @@ def check_if_nothing_changed (recent_nc_files, secret):
     try:
         saved_nc_files = pickle.load(open(secret, "rb"))
     except:
-        print ("falied to open secret file; will start from scratch")
+        print ("failed to open secret file; will start from scratch")
         return False
     nothing_changed = [str(s1) == str(s2) for s1,s2 in zip (recent_nc_files[0], saved_nc_files[0])]
     if (all(nothing_changed)): nothing_changed = (str(recent_nc_files[1]) == str(saved_nc_files[1]))
-    if (nothing_changed): return True
+    if (nothing_changed): 
+        print ("Nohing changed; Exiting now")
+        return True
+    print ("Some file changed; will start from scratch")
     return False
 
 def uvaia (reference, merged, uv_align, civet_align, uv_table):
@@ -165,7 +168,7 @@ def update_merged_civet (full_tab, civ_tab, ofile, old_names):
     return full_tab
 
 def run_all ():
-    recent_nc_files = get_recent_norw_civet_files (norw = upload_fasta_dirs, civet = civet_metadata, n_dirs = 3) 
+    recent_nc_files = get_recent_norw_civet_files (norw = upload_fasta_dirs, civet = civet_metadata, n_dirs = 5) 
     if (check_if_nothing_changed (recent_nc_files, recent_secret)): return 
     list_civet_names, civ_table = get_list_of_civet_seqnames (civet_metadata)
     old_names, aln_length = update_recent_fasta (recent_dirs = recent_nc_files[0], outfile = merged_fasta, civet_names = list_civet_names)
