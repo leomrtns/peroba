@@ -1,4 +1,4 @@
-import os, glob, gzip, pickle, subprocess
+import os, sys, glob, gzip, pickle, subprocess
 from Bio import Seq, AlignIO
 from Bio.SeqRecord import SeqRecord
 import pandas as pd, datetime, re, gspread
@@ -19,6 +19,15 @@ merged_tbl_filename = local_dir + "merged.csv.gz"
 google_credentials = local_dir + ".credentials.json"
 
 cols_in_fulltab = ["phylotype","uk_lineage", "lineage", "adm1"] # pd.Series.mode can't handle only NaN (unless dropna=False)
+cols_in_order = [     ## "central_sample_id" is index
+    "acgt_distance",
+    "snp_distance",
+    "lineage",
+    "phylotype",
+    "uk_lineage",
+    "adm1",
+    "row_class"
+    ]
 
 def save_fasta_recent (recent_fas, outfile):
     with gzip.open(outfile,"wb") as fw:
@@ -32,7 +41,9 @@ def load_fasta_from_recent_dirs (recent_dirs, civet_names):
     for d in recent_dirs:
         seqname_long = glob.glob(d + "/*") # list, each value has whole path
         seqname = [os.path.basename(x) for x in seqname_long]
-        filname = [glob.glob(x + "/*.fa*")[0] for x in seqname_long]
+        filname = [glob.glob(x + "/*.fa*") for x in seqname_long] # some will be empty
+        filname = [x[0] for x in filname if len(x)] # for those non-empty, I assume only one is a fasta (o.w. I'll take first one) 
+        if len(filname) < 1: continue # skip below , nothing to do
         # exclude recent sequences that are already on civet
         new_names = [[sname, fname] for sname, fname in zip (seqname, filname) if sname not in civet_names]
         for sname, fname in new_names:
@@ -49,9 +60,9 @@ def update_recent_fasta (recent_dirs, outfile, civet_names):
     #if filecmp.cmp (newfile, outfile):   ## TRUE if equal
     return old_names, len(recent_fas)
 
-def get_recent_norw_civet_files (norw, civet, n_dirs):
+def get_recent_norw_civet_files (norw, civet, n_dirs): # ndirs  to _exclude_ (older)
     if n_dirs < 1: n_dirs = 1
-    recent_dirs = sorted (glob.glob(norw), key=os.path.getmtime)[-n_dirs:]
+    recent_dirs = sorted (glob.glob(norw), key=os.path.getmtime)[n_dirs:]
     recent_civet_meta = glob.glob (civet)[0]
     return [recent_dirs, recent_civet_meta]
 
@@ -61,18 +72,21 @@ def check_if_nothing_changed (recent_nc_files, secret):
     except:
         print ("failed to open secret file; will start from scratch")
         return False
+    print([str(s1)==str(s2) for s1,s2 in zip (recent_nc_files[0], saved_nc_files[0])])
     nothing_changed = [str(s1) == str(s2) for s1,s2 in zip (recent_nc_files[0], saved_nc_files[0])]
-    if (all(nothing_changed)): nothing_changed = (str(recent_nc_files[1]) == str(saved_nc_files[1]))
-    if (nothing_changed): 
-        print ("Nohing changed; Exiting now")
-        return True
+    if (all(nothing_changed)): 
+        nothing_changed = (str(recent_nc_files[1]) == str(saved_nc_files[1]))
+        if (nothing_changed): 
+            print ("Nohing changed; Exiting now")
+            return True
     print ("Some file changed; will start from scratch")
     return False
 
 def uvaia (reference, merged, uv_align, civet_align, uv_table):
-    runstr = f"uvaialign -r {reference} {merged} > {uv_align}"
+    #runstr = f"uvaialign -r {reference} {merged} > {uv_align}"
+    runstr = f"~/bin/uvaialign -r {reference} {merged} > {uv_align}" # ~/bin hardcoded since climb crontab has issues
     proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)
-    runstr = f"uvaia -t 16 -n 1 -r {civet_align} {uv_align} > {uv_table}"
+    runstr = f"~/bin/uvaia -t 16 -n 1 -r {civet_align} {uv_align} > {uv_table}"
     proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)
 
 def update_peroba_sheet (credentials, merged_df):
@@ -104,7 +118,7 @@ def update_peroba_sheet (credentials, merged_df):
 def get_list_of_civet_seqnames (cfile): ## also returns metadata 
     cols_to_remove = ["secondary_identifier","is_community","is_hcw","is_travel_history","travel_history", "epi_week","is_surveillance"]
     civ_tab = pd.read_csv (glob.glob(cfile)[0], compression="infer", dtype="unicode")
-    civ_tab = civ_tab.drop(cols_to_remove, axis=1)
+    #civ_tab = civ_tab.drop(cols_to_remove, axis=1) ## removed from DB in 2020.11.20 circa
     return civ_tab["central_sample_id"].tolist(), civ_tab
 
 def merge_civet_uvaia (civ_tab, ufile):
@@ -127,16 +141,16 @@ def merge_civet_uvaia (civ_tab, ufile):
     # one row per new query sequence
     full_tab = uva_tab.groupby('query sequence').agg(acgt_distance=("acgt_distance", pd.Series.mean), snp_distance=("snp_distance", pd.Series.mean))
     for col in cols_in_fulltab:
-        df = uva_tab.groupby('query sequence').agg(cname=(col, lambda x: stats.mode(x.tolist())[0]))
+        df = uva_tab.groupby('query sequence').agg(cname=(col, lambda x: max(pd.Series.mode(x),key=len) )) # after finding mode, pick longest one
         df.rename(columns={"cname":col}, inplace=True)
         full_tab = full_tab.combine_first(df)
     full_tab.reset_index(drop=False, inplace=True)
     full_tab.rename(columns={"query sequence":"central_sample_id"}, inplace=True)
-    full_tab["row_class"] = "uvaia"
+    full_tab["row_class"] = "estimated_with_uvaia"
     ## 2. recent sequences which are already on civet DB (should have been handled before running uvaia, btw) 
     df = civ_tab[civ_tab["central_sample_id"].isin(known_seqs)]
     df = df[cols_in_fulltab + ["central_sample_id"]]
-    df["row_class"] = "civet"
+    df["row_class"] = "included_in_civet_DB"
     df["acgt_distance"] = 0
     df["snp_distance"] = 0
     full_tab = pd.concat([full_tab,df])
@@ -146,7 +160,7 @@ def update_merged_civet (full_tab, civ_tab, ofile, old_names):
     ## 1. recent sequences, but which are already on civet DB 
     df = civ_tab[civ_tab["central_sample_id"].isin(old_names)]
     df = df[cols_in_fulltab + ["central_sample_id"]]
-    df["row_class"] = "civet"
+    df["row_class"] = "included_in_civet_DB"
     df["acgt_distance"] = 0
     df["snp_distance"] = 0
     if full_tab is None: # in case uvaia wasn't needed 
@@ -158,7 +172,7 @@ def update_merged_civet (full_tab, civ_tab, ofile, old_names):
     local_seqs += civ_tab.loc[(civ_tab["central_sample_id"].str.contains("NORW",flags=re.IGNORECASE, na=False)),"central_sample_id"].tolist()
     df = civ_tab[civ_tab["central_sample_id"].isin(local_seqs)]
     df = df[cols_in_fulltab + ["central_sample_id"]]
-    df["row_class"] = "local"
+    df["row_class"] = "from_Norfolk"
     df["acgt_distance"] = 0
     df["snp_distance"] = 0
     full_tab = pd.concat([full_tab,df])
@@ -168,7 +182,7 @@ def update_merged_civet (full_tab, civ_tab, ofile, old_names):
     return full_tab
 
 def run_all ():
-    recent_nc_files = get_recent_norw_civet_files (norw = upload_fasta_dirs, civet = civet_metadata, n_dirs = 5) 
+    recent_nc_files = get_recent_norw_civet_files (norw = upload_fasta_dirs, civet = civet_metadata, n_dirs = 15) 
     if (check_if_nothing_changed (recent_nc_files, recent_secret)): return 
     list_civet_names, civ_table = get_list_of_civet_seqnames (civet_metadata)
     old_names, aln_length = update_recent_fasta (recent_dirs = recent_nc_files[0], outfile = merged_fasta, civet_names = list_civet_names)
@@ -177,6 +191,7 @@ def run_all ():
         uvaia (ref_wuhan, merged_fasta, uv_aln, civet_aln, uv_tbl)
         merged_df = merge_civet_uvaia (civ_table, uv_tbl)
     merged_df = update_merged_civet (merged_df, civ_table, merged_tbl_filename, old_names)
+    merged_df = merged_df[cols_in_order] ## reorder columns 
     update_peroba_sheet (google_credentials, merged_df)
     # only save dump if everything went smooth
     pickle.dump (recent_nc_files, open(recent_secret, "wb"))
