@@ -72,6 +72,9 @@ def check_if_nothing_changed (recent_nc_files, secret):
     except:
         print ("failed to open secret file; will start from scratch")
         return False
+    if (len(recent_nc_files[0]) != len(saved_nc_files[0])):
+        print ("new directories added")
+        return False
     nothing_changed = [str(s1) == str(s2) for s1,s2 in zip (recent_nc_files[0], saved_nc_files[0])]
     if (all(nothing_changed)): 
         nothing_changed = (str(recent_nc_files[1]) == str(saved_nc_files[1]))
