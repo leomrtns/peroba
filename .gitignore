@@ -1,4 +1,5 @@
 /build
+/backup
 .ipynb_checkpoints
 peroba.egg-info
 peroba/data/gadm36_GBR_2.*
