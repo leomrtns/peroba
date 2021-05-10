@@ -12,7 +12,7 @@ Make sure you have an up-to-date pip installed.
 """.format('.'.join(str(n) for n in min_version)), sys.exit(error)
 
 base_dir = Path(__file__).parent.resolve()
-version_file = base_dir / "peroba/__version__.py"
+version_file = base_dir / "perobarosa/__version__.py"
 readme_file = base_dir / "README.md"
 
 # Eval the version file to get __version__; avoids importing our own package
@@ -27,13 +27,13 @@ setuptools.setup(
     version = __version__,
     author = "Leonardo de Oliveira Martins",
     author_email = "Leonardo.de-Oliveira-Martins@quadram.ac.uk",
-    description = "Phylogenetic analysis pipeline for SARS-CoV2 at the Quadram Institute Biosciences",
+    description = "Phylogenetic analysis pipeline for viral epigenomics at the Quadram Institute Biosciences",
     long_description = long_description,
     long_description_content_type = "text/markdown",
     keywords = "phylogenetics, COVID19",
-    url = "https://github.com/quadram-institute-bioscience",
+    url = "https://github.com/quadram-institute-bioscience/peroba",
     project_urls = {
-        "Source": "https://github.com/quadram-institute-bioscience",
+        "Source": "https://github.com/quadram-institute-bioscience/peroba",
     },
     packages = setuptools.find_packages(),
     include_package_data=True,
@@ -69,12 +69,6 @@ setuptools.setup(
     # Install a "peroba" program which calls peroba.__main__.main()
     #   https://setuptools.readthedocs.io/en/latest/setuptools.html#automatic-script-creation
     entry_points = {
-        "console_scripts": [
-            "peroba_database = peroba.peroba_database:main",
-            "peroba_subsample = peroba.peroba_subsample:main",
-            "peroba_backbone = peroba.peroba_backbone:main",
-            "peroba_report = peroba.peroba_report:main"
-        ]
+        "console_scripts": [ "peroba = perobarosa.peroba:main" ]
     }
-    
 )
