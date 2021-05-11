@@ -4,32 +4,19 @@ channels:
   - bioconda
   - defaults
 dependencies:
-  - mafft>7.467
-  - iqtree>2
   - python>3.6
-  - snp-sites
-  - minimap2
-  - pandoc>2.8
-  - rapidnj
   - pandas
   - pip
   - biopython>1.68
-  - seaborn
   - scikit-bio 
   - scikit-learn 
-  - matplotlib
-  - geopandas
-  - basemap
-  - basemap-data-hires
-  - mapclassify
-  - descartes
-  - tabulate
   - treeswift
   - ete3
   - python-xxhash
+  - mafft>7.467
   - xz
+    #- oauth2client
+    #- gspread
   - pip:
     - .  # this means run pip on this directory's setup.py 
     - pytools==2020.1
-    - pandas_profiling
-    - pastml

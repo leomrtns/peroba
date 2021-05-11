@@ -11,8 +11,8 @@ logger.addHandler(stream_log)
 current_working_dir = os.getcwd()
 
 def run_align (args):
-    from perobarosa import task_align
-    task_align.run (args.fasta, args.alignment, args.outdir)
+    from perobarosa import task_seq
+    task_seq.align (args.fasta, args.alignment, args.reference)
 
 
 class ParserWithErrorHelp(argparse.ArgumentParser):
@@ -21,24 +21,27 @@ class ParserWithErrorHelp(argparse.ArgumentParser):
         self.print_help()
         sys.exit(2)
 
-if __name__ == '__main__':
+def main():
     parser = ParserWithErrorHelp(
     description="""
     peroba top level
-    """, 
-    usage='''peroba <subcommand> [options]''')
+    """) 
 
     parser.add_argument('-d', '--debug', action="store_const", dest="loglevel", const=logging.DEBUG, default=logging.WARNING, help="Print debugging statements")
     parser.add_argument('-v', '--verbose', action="store_const", dest="loglevel", const=logging.INFO, help="Add verbosity")
     parser.add_argument('-o', '--outdir', action="store", help="Output database directory. Default: working directory")
-
     subp= parser.add_subparsers(dest='command')
+
     up_aln = subp.add_parser('align', help="add sequences to an alignment")
-    align.add_argument('-s', '--fasta', metavar='fas', nargs='+', required=True, help="unaligned sequences")
-    align.add_argument('-a', '--alignment', metavar='aln', nargs="+", help="optional file with aligned sequences")
-    align.set_defaults(func = run_align)
+    #up_aln.add_argument('-s', '--fasta', metavar='fas', nargs='+', required=True, help="unaligned sequences")
+    up_aln.add_argument('fasta', help="unaligned sequences")
+    up_aln.add_argument('-a', '--alignment', metavar='aln', nargs="+", help="optional file with aligned sequences")
+    up_aln.add_argument('-r', '--reference', metavar='fas', help="optional file with reference genome (default=MN908947.3)")
+    up_aln.set_defaults(func = run_align)
 
     args = parser.parse_args()
+    args.func(args)
+
     logging.basicConfig(level=args.loglevel)
     if args.outdir: 
         args.outdir = os.path.join(current_working_dir, args.outdir)
@@ -46,4 +49,7 @@ if __name__ == '__main__':
     else: 
         args.outdir = current_working_dir
 
-    args.func(args) # calls task 
+    #args.func(args) # calls task 
+
+if __name__ == '__main__':
+    main()
