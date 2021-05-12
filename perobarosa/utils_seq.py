@@ -1,9 +1,6 @@
-import os
-import logging, xxhash
-
-import numpy as np, pandas as pd
+import os, logging, xxhash, numpy as np, pandas as pd
 from Bio import Seq, SeqIO
-import random, datetime, sys,  re, glob, collections, subprocess, itertools, pathlib, base64
+import random, datetime, sys, re, glob, collections, subprocess, itertools, pathlib, base64
 import lzma, gzip, bz2
 
 
@@ -15,13 +12,21 @@ stream_log.setFormatter(log_format)
 stream_log.setLevel(logging.INFO)
 logger.addHandler(stream_log)
 
+
+def read_fasta_headers (filename, check_name = False):
+    seqnames = []
+    with open_anyformat (filename, "r") as handle:
+        for record in SeqIO.parse(handle, "fasta"):
+            if (check_name and "|" in record.description): # consensus from COGUK and GISAID names: `hCoV-19/Australia/NT12/2020|EPI_ISL_426900|2020-03-25`
+                seqname = record.description.split("|")[0]
+                record.id = seqname.replace("hCoV-19/","")
+            seqnames.append(record.id)
+    logger.info("Read %s sequence names from file %s", str(len(seqnames)), filename)
+    return seqnames 
+
 def read_fasta_as_list (filename, fragment_size = 0, check_name = False):
     unaligned = []
-    if filename.endswith(".bz2"): this_open = bz2.open #if "bz2" in filename[-5:]: this_open = bz2.open
-    if filename.endswith(".gz"):  this_open = gzip.open
-    if filename.endswith(".xz"):  this_open = lzma.open
-    else:  this_open = open
-    with this_open(filename, "rt") as handle:
+    with open_anyformat (filename, "r") as handle:
         for record in SeqIO.parse(handle, "fasta"):
             record.seq  = Seq.Seq(str(record.seq.upper()).replace(".","N")) # one damn sequence has dots 
             if (check_name and "|" in record.description): # consensus from COGUK and GISAID names: `hCoV-19/Australia/NT12/2020|EPI_ISL_426900|2020-03-25`
@@ -112,14 +117,7 @@ def remove_duplicated_sequences_list (sequences): # input is list, returns a dic
 def save_sequence_dict_to_file (seqs, fname=None, use_seq_id = False):
     if fname is None: fname = "tmp." + '%012x' % random.randrange(16**12) + ".aln.xz"
     logger.info(f"Saving sequences to file {fname}")
-    mode = "wb"
-    if fname.endswith(".bz2"): this_open = bz2.open #if "bz2" in filename[-5:]: this_open = bz2.open
-    if fname.endswith(".gz"):  this_open = gzip.open
-    if fname.endswith(".xz"):  this_open = lzma.open
-    else:  
-        this_open = open
-        mode = "w"
-    with this_open(fname,mode) as fw: 
+    with open_anyformat (fname, "w") as fw: 
         for name, rec in seqs.items():
             if use_seq_id is True: # default is to use dict key
                 name = rec.id
@@ -129,3 +127,14 @@ def save_sequence_dict_to_file (seqs, fname=None, use_seq_id = False):
                 rec.id = name ## make sure alignment will have same names
     logger.info(f"Finished saving sequences")
     return os.path.basename(fname)
+
+def open_anyformat (fname, mode = "r"):
+    if (mode == "r"): openmode = "rt"
+    else:             openmode = "wb"
+    if fname.endswith(".bz2"): this_open = bz2.open #if "bz2" in filename[-5:]: this_open = bz2.open
+    if fname.endswith(".gz"):  this_open = gzip.open
+    if fname.endswith(".xz"):  this_open = lzma.open
+    else:  
+        this_open = open
+        if (mode == "w"): openmode = "w"
+    return this_open (fname, openmode) 
