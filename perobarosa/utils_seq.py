@@ -39,7 +39,7 @@ def read_fasta_as_list (filename, fragment_size = 0, check_name = False):
 
 def align_mafft_in_blocks (sequences, reference_file, seqs_per_block = 2000):    # list not dict
     if seqs_per_block < 100:   seqs_per_block = 100
-    if seqs_per_block > 10000: seqs_per_block = 10000 # mafft chokes on large matrices (but 10k is fine btw)
+    if seqs_per_block > 50000: seqs_per_block = 50000 # mafft chokes on large matrices (but 10k is fine btw)
     nseqs = len(sequences)
     aligned = []
     for i in range (0, nseqs, seqs_per_block):
@@ -75,6 +75,33 @@ def mafft_align_seqs (sequences=None, infile = None, outfile = None, reference_f
         if outfile is not None:
             SeqIO.write(aligned, ofl, "fasta")
     return aligned
+
+def uvaia_align_seqs (sequences=None, ambiguous=None, infile = None, outfile = None, reference_file = None, prefix = "/tmp/", exclude_reference = True):    # list not dict
+    if (sequences is None) and (infile is None):
+        print ("ERROR: You must give me a fasta object or file")
+    if prefix is None: prefix = "./"
+    if infile is None: ifl = f"{prefix}/uvaia.fasta"
+    else: ifl = infile # if both infile and sequences are present, it will save (overwrite) infile
+    if outfile is None: ofl = f"{prefix}/uvaia.aln"
+    else: ofl = outfile # in this case it will not exclude_reference
+    if sequences: SeqIO.write (sequences, ifl, "fasta") ## else it should be present in infile
+    if (ambiguous is None): ambiguous = 0.1
+
+    runstr = f"uvaialign -a {ambiguous} -r {reference} {ifl} > {ofl}" # ~/bin hardcoded since climb crontab has issues
+    proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)
+    aligned = AlignIO.read(ofl, "fasta")
+
+    if infile is None:  os.system("rm -f " + ifl)
+    if outfile is None: os.system("rm -f " + ofl)
+
+    if exclude_reference:
+        refseq = AlignIO.read(reference_file, "fasta")
+        refseqname = refseq[0].id
+        aligned = [x for x in aligned if x.id != refseqname]
+        if outfile is not None:
+            SeqIO.write(aligned, ofl, "fasta")
+    return aligned
+
 
 def calc_freq_N_from_string (genome):
     l = len(genome)

@@ -11,5 +11,7 @@ logger.addHandler(stream_log)
 
 default_ref_seq = os.path.join( os.path.dirname(os.path.abspath(__file__)), "data/MN908947.3.fas") 
 
-def align (fasta, alignment, reference):
-    print (" ok I am working")
+def align (fasta, alignment = None, reference = None):
+    if reference is None:
+        reference = default_ref_seq
+    if alignment is None:
