@@ -7,7 +7,7 @@ import lzma, gzip, bz2
 logger = logging.getLogger(__name__) 
 logger.propagate = False
 stream_log = logging.StreamHandler()
-log_format = logging.Formatter(fmt='fileutils %(asctime)s [%(levelname)s] %(message)s', datefmt="%Y-%m-%d %H:%M")
+log_format = logging.Formatter(fmt='peroba_UTIL %(asctime)s [%(levelname)s] %(message)s', datefmt="%Y-%m-%d %H:%M")
 stream_log.setFormatter(log_format)
 stream_log.setLevel(logging.INFO)
 logger.addHandler(stream_log)
@@ -76,16 +76,20 @@ def mafft_align_seqs (sequences=None, infile = None, outfile = None, reference_f
             SeqIO.write(aligned, ofl, "fasta")
     return aligned
 
-def uvaia_align_seqs (sequences=None, ambiguous=None, infile = None, outfile = None, reference_file = None, prefix = "/tmp/", exclude_reference = True):    # list not dict
+def uvaia_align_seqs (sequences=None, ambiguous=None, infile = None, outfile = None, reference_file = None, prefix = "/tmp/"):    # list not dict
     if (sequences is None) and (infile is None):
         print ("ERROR: You must give me a fasta object or file")
+    uniq = '%012x' % random.randrange(16**12)
     if prefix is None: prefix = "./"
-    if infile is None: ifl = f"{prefix}/uvaia.fasta"
+    if infile is None: ifl = f"{prefix}{uniq}.fasta.gz"  # save as gz since uvaia can handle it
     else: ifl = infile # if both infile and sequences are present, it will save (overwrite) infile
-    if outfile is None: ofl = f"{prefix}/uvaia.aln"
-    else: ofl = outfile # in this case it will not exclude_reference
-    if sequences: SeqIO.write (sequences, ifl, "fasta") ## else it should be present in infile
+    if outfile is None or outfile is "FILE": ofl = f"{prefix}{uniq}uvaia.aln" # create file but not delete it, instead returning it
+    else: ofl = outfile 
     if (ambiguous is None): ambiguous = 0.1
+
+    with open_anyformat (ifl, "w") as fw: 
+        for x in sequences:
+            fw.write(str(f">{x.id}\n{x.seq}\n").encode())
 
     runstr = f"uvaialign -a {ambiguous} -r {reference} {ifl} > {ofl}" # ~/bin hardcoded since climb crontab has issues
     proc_run = subprocess.check_output(runstr, shell=True, universal_newlines=True)
@@ -93,15 +97,8 @@ def uvaia_align_seqs (sequences=None, ambiguous=None, infile = None, outfile = N
 
     if infile is None:  os.system("rm -f " + ifl)
     if outfile is None: os.system("rm -f " + ofl)
-
-    if exclude_reference:
-        refseq = AlignIO.read(reference_file, "fasta")
-        refseqname = refseq[0].id
-        aligned = [x for x in aligned if x.id != refseqname]
-        if outfile is not None:
-            SeqIO.write(aligned, ofl, "fasta")
-    return aligned
-
+    if outfile is "FILE": return ofl
+    else:                 return aligned
 
 def calc_freq_N_from_string (genome):
     l = len(genome)
@@ -158,10 +155,11 @@ def save_sequence_dict_to_file (seqs, fname=None, use_seq_id = False):
 def open_anyformat (fname, mode = "r"):
     if (mode == "r"): openmode = "rt"
     else:             openmode = "wb"
-    if fname.endswith(".bz2"): this_open = bz2.open #if "bz2" in filename[-5:]: this_open = bz2.open
-    if fname.endswith(".gz"):  this_open = gzip.open
-    if fname.endswith(".xz"):  this_open = lzma.open
+    if   fname.endswith(".bz2"): this_open = bz2.open #if "bz2" in filename[-5:]: this_open = bz2.open
+    elif fname.endswith(".gz"):  this_open = gzip.open
+    elif fname.endswith(".xz"):  this_open = lzma.open
     else:  
         this_open = open
-        if (mode == "w"): openmode = "w"
+        if (mode == "w"): openmode = "w"  ## only raw file for writting doesn't need "wb"
     return this_open (fname, openmode) 
+
