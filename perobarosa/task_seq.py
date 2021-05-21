@@ -25,22 +25,8 @@ def align (fastafile, defaults, alignment = None, output = None, length = 20000,
     aln_seqnames = set(aln_seqnames) ## much faster lookup than list
 
     logger.info("Reading fasta file %s and store incrementally (i.e. not already aligned)", fastafile)
-    sequences = []
-    n_short = 0; n_valid = 0
-    with open_anyformat (fastafile, "r") as handle:
-        for record in SeqIO.parse(handle, "fasta"):
-            if record.id not in aln_seqnames:
-                this_len = len(record.seq)
-                if this_len > length:
-                    sequences.append(record)
-                    n_valid += 1
-                    if (not n_valid%10000): 
-                        logger.info(f"{n_valid} sequences read")
-                else:
-                    logger.debug (f"Sequence {record.id} too short, has only {this_len} sites")
-                n_short += 1
+    sequences, invalid = read_fasta_new_only (fastafile, aln_seqnames, length, ambiguous)
     n_seqs = len(sequences)
-    if n_short > 0: logger.warning ("Number of sequences excluded due to short length: {n_short}")
     if not n_seqs: 
         logger.warning ("No new sequences found in %s (empty file or all included in alignments)", fastafile)
         return

@@ -37,6 +37,32 @@ def read_fasta_as_list (filename, fragment_size = 0, check_name = False):
     logger.info("Read %s sequences from file %s", str(len(unaligned)), filename)
     return unaligned
 
+def read_fasta_new_only (fastafile, prev_seqnames, min_length, ambig):
+    sequences = []
+    invalid = []
+    n_valid = 0
+    with open_anyformat (fastafile, "r") as handle:
+        for record in SeqIO.parse(handle, "fasta"):
+            if record.id not in prev_seqnames:
+                this_len = len(record.seq)
+                if this_len > length:
+                    this_seq = record.seq.upper()
+                    freq_ACGT = sum([this_seq.count(nuc) for nuc in ["A", "C", "G", "T"]]) / this_len 
+                    if (1 - freq_ACGT) < ambig:
+                        record.seq  = Seq.Seq(this_seq)
+                        sequences.append(record)
+                        n_valid += 1
+                        if (not n_valid%10000): 
+                            logger.info(f"{n_valid} sequences read")
+                    else:
+                        invalid.append([record.id,f"acgt={freq_ACGT}"])
+                        logger.debug (f"Sequence {record.id} has {freq_ACGT} of ambiguous (non-ACGT) sites")
+                else:
+                    invalid.append([record.id,f"len={this_len}"])
+                    logger.debug (f"Sequence {record.id} too short, has only {this_len} sites")
+    if len (invalid): logger.warning ("Number of sequences excluded due to short length or highly ambiguous: $s", len(invalid))
+    return sequences, invalid
+
 def align_mafft_in_blocks (sequences, reference_file, seqs_per_block = 2000):    # list not dict
     if seqs_per_block < 100:   seqs_per_block = 100
     if seqs_per_block > 50000: seqs_per_block = 50000 # mafft chokes on large matrices (but 10k is fine btw)
