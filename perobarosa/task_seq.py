@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from perobarosa.utils_seq import *
+import pandas as pd
 
 logger = logging.getLogger(__name__) # https://github.com/MDU-PHL/arbow
 logger.propagate = False
@@ -9,7 +10,7 @@ stream_log.setFormatter(log_format)
 stream_log.setLevel(logging.INFO)
 logger.addHandler(stream_log)
 
-def align (fastafile, defaults, alignment = None, output = None, length = 20000, ambiguous = 0.1):
+def align (fastafile, defaults, alignment = None, csv = None, output = None, length = 20000, ambiguous = 0.1):
     reference = defaults["reference"]
     if output is None: output = defaults["current_dir"] + "incremental." +  defaults["timestamp"] + ".aln.xz"
     if ambiguous is None or ambiguous > 0.9: ambiguous = 0.1
@@ -18,11 +19,16 @@ def align (fastafile, defaults, alignment = None, output = None, length = 20000,
     # read existing alignments
     if alignment is None: logger.info (f"No alignment given; will align all sequences from fasta file")
     else:                 logger.info (f"Will read all alignment files and store sequence names")
-    aln_seqnames = []
+    aln_seqnames = set()
     for aln in alignment:
         logger.debug(f"Reading alignment {aln}") 
         aln_seqnames += read_fasta_headers (aln)
     aln_seqnames = set(aln_seqnames) ## much faster lookup than list
+
+    if csv is not None:
+        for fname in csv:
+            df = pd.read_csv (fname, compression="infer", sep=",", dtype='unicode')
+            aln_seqnames.update(df["taxon"].unique())
 
     logger.info("Reading fasta file %s and store incrementally (i.e. not already aligned)", fastafile)
     sequences, invalid = read_fasta_new_only (fastafile, aln_seqnames, length, ambiguous)
@@ -30,6 +36,10 @@ def align (fastafile, defaults, alignment = None, output = None, length = 20000,
     if not n_seqs: 
         logger.warning ("No new sequences found in %s (empty file or all included in alignments)", fastafile)
         return
+    if (len(invalid)):
+        outcsv = defaults["current_dir"] + "excluded." +  defaults["timestamp"] + ".csv.gz"
+        logger.info(f"Saving list of sequences failing QC to f{outcsv} table") 
+        invalid.to_csv (outcsv, index_col=False)
     
     logger.info(f"Preparing file chunks with temporary file names (to run uvaia in parallel)") 
     n_chunks = defaults["n_threads"]
