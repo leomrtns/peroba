@@ -22,7 +22,7 @@ def align (fastafile, defaults, alignment = None, csv = None, output = None, len
     aln_seqnames = set()
     for aln in alignment:
         logger.debug(f"Reading alignment {aln}") 
-        aln_seqnames += read_fasta_headers (aln)
+        aln_seqnames.update(read_fasta_headers (aln))
     aln_seqnames = set(aln_seqnames) ## much faster lookup than list
 
     if csv is not None:
@@ -38,8 +38,8 @@ def align (fastafile, defaults, alignment = None, csv = None, output = None, len
         return
     if (len(invalid)):
         outcsv = defaults["current_dir"] + "excluded." +  defaults["timestamp"] + ".csv.gz"
-        logger.info(f"Saving list of sequences failing QC to f{outcsv} table") 
-        invalid.to_csv (outcsv, index_col=False)
+        logger.info(f"Saving list of sequences failing QC to {outcsv} table") 
+        invalid.to_csv (outcsv, index=False)
     
     logger.info(f"Preparing file chunks with temporary file names (to run uvaia in parallel)") 
     n_chunks = defaults["n_threads"]

@@ -24,7 +24,7 @@ def run_align (args):
     if args.length < 10000: 
         logger.warning (f"Length {args.length} is way too short for genome alignment; changing to default 28k");
         args.length = 28000
-    task_seq.align (args.fasta, defaults, args.alignments, args.csv, args.output, args.length, args.ambiguous)
+    task_seq.align (args.fasta, defaults, args.alignments, args.csv, args.output, int(args.length), float(args.ambiguous))
 
 class ParserWithErrorHelp(argparse.ArgumentParser):
     def error(self, message):

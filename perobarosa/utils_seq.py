@@ -45,11 +45,11 @@ def read_fasta_new_only (fastafile, prev_seqnames, min_length, ambig):
         for record in SeqIO.parse(handle, "fasta"):
             if record.id not in prev_seqnames:
                 this_len = len(record.seq)
-                if this_len > length:
-                    this_seq = record.seq.upper()
-                    freq_ACGT = sum([this_seq.count(nuc) for nuc in ["A", "C", "G", "T"]]) / this_len 
+                if this_len > min_length:
+                    record.seq = record.seq.upper()
+                    freq_ACGT = sum([record.seq.count(nuc) for nuc in ["A", "C", "G", "T"]]) / this_len 
                     if (1 - freq_ACGT) < ambig:
-                        record.seq  = Seq.Seq(this_seq)
+                        #record.seq  = Seq.Seq(this_seq)
                         sequences.append(record)
                         n_valid += 1
                         if (not n_valid%10000): 
@@ -62,7 +62,7 @@ def read_fasta_new_only (fastafile, prev_seqnames, min_length, ambig):
                     invalid["taxon"].append(record.id)
                     invalid["excluded"].append(f"len={this_len}")
                     logger.debug (f"Sequence {record.id} too short, has only {this_len} sites")
-    if len (invalid["taxon"]): logger.warning ("Number of sequences excluded due to short length or highly ambiguous: %s", len(invalid))
+    if len (invalid["taxon"]): logger.warning ("Number of sequences excluded due to short length or highly ambiguous: %s", len(invalid["taxon"]))
     return sequences, pd.DataFrame(invalid)
 
 def align_mafft_in_blocks (sequences, reference_file, seqs_per_block = 2000):    # list not dict
