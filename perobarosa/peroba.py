@@ -52,7 +52,7 @@ def main():
     up_aln.add_argument('-c', '--csv', metavar='csv[.gz]', nargs="+", help="optional files with list of sequences to exclude (usually from previous round)")
     up_aln.add_argument('-o', '--output', metavar='aln', help="incremental output alignment (i.e. only new sequences)")
     up_aln.add_argument('-A', '--ambiguous', metavar='float', help="maximum allowed ambiguity (non-ACGT) for uvaia (default = 0.1)")
-    up_aln.add_argument('-l', '--length', metavar='int', help="exclude sequences shorter than this (default = 25k)")
+    up_aln.add_argument('-l', '--length', metavar='int', help="exclude sequences shorter than this (default = 28k)")
     up_aln.set_defaults(func = run_align)
 
     args = parser.parse_args()
