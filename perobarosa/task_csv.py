@@ -16,7 +16,7 @@ epidem_columns = ["strain", "gisaid_epi_isl", "date", "age", "sex", "GISAID_clad
 coguk_columns = ['sequence_name', 'gisaid_id', 'sample_date', 'country', 'adm1', 'NUTS1', 'source_age', 'source_sex','travel_history', 'lineage']
 
 def update_metadata (metadata_file, defaults, alignment = None, csvfile = None, output = None, entry_timestamp = None):
-    if output is None: output = defaults["current_dir"] + "gisaid_meta." +  defaults["timestamp"] + ".tsv.xz"
+    if output is None: output = defaults["current_dir"] + "peroba_meta." +  defaults["timestamp"] + ".tsv.xz"
     if entry_timestamp is None: timestamp = datetime.datetime.now().strftime("%y%m%d")
     else:                       timestamp = str(entry_timestamp)
   
@@ -198,7 +198,7 @@ def convert_from_coguk_metadata (df0):
     valid_cols = [x for x in ["travel_history", "NUTS1"] if x in df.columns]
     if (len(valid_cols) == 2):
         df["location_coguk"] = df["travel_history"].fillna('') + "|" + df["NUTS1"].fillna('')
-        df["location_coguk"] = df["location_coguk"].replace(r'^\s*|\s*$', np.nan, regex=True) ## of both travel and nuts are empty 
+        df["location_coguk"] = df["location_coguk"].replace(r'^\s*\|\s*$', np.nan, regex=True) ## of both travel and nuts are empty 
 
     ## add missing columns with empty data, to be able to merge
     missing_columns = [x for x in peroba_columns if x not in df.columns]
