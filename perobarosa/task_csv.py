@@ -10,7 +10,7 @@ stream_log.setFormatter(log_format)
 stream_log.setLevel(logging.INFO)
 logger.addHandler(stream_log)
 
-peroba_columns = ["strain", "gisaid_id", "date", "location", "location_gisaid", "location_coguk", "age", "gender", "gisaid_clade", "pango_lineage"]
+peroba_columns = ["strain", "gisaid_id", "date", "location", "location_gisaid", "location_coguk", "age", "gender", "gisaid_clade", "pango_lineage", "timestamp"]
 gisaid_columns = ["Virus name", "Accession ID", "Collection date", "Location", "Additional location information", "Patient age", "Gender", "Clade", "Pango lineage"]
 epidem_columns = ["strain", "gisaid_epi_isl", "date", "age", "sex", "GISAID_clade", "pango_lineage", "region","country","division", "region_exposure","country_exposure","division_exposure"]
 coguk_columns = ['sequence_name', 'gisaid_id', 'sample_date', 'country', 'adm1', 'NUTS1', 'source_age', 'source_sex','travel_history', 'lineage']
@@ -35,7 +35,7 @@ def update_metadata (metadata_file, defaults, alignment = None, csvfile = None, 
     csv = None
     if (csvfile is not None):
         csv = pd.read_csv (csvfile, compression="infer", sep="\t", dtype='unicode')
-        keep_columns = [x for x in peroba_columns if x in csv.columns]
+        keep_columns = [x for x in peroba_columns  if x in csv.columns]
         if (len(keep_columns) < len(peroba_columns)): 
             logger.error ("Existing table %s does not look like a peroba metadata file, missing at least one column from\n %s",csvfile, "\n".join(gisaid_keep_columns))
             sys.exit(1)
@@ -49,7 +49,7 @@ def update_metadata (metadata_file, defaults, alignment = None, csvfile = None, 
     df = None
     df0 = pd.read_csv (metadata_file, compression="infer", sep="\t", dtype='unicode')
 
-    keep_columns = [x for x in peroba_columns + ["timestamp"] if x in df0.columns]
+    keep_columns = [x for x in peroba_columns if x in df0.columns]
     if (len(peroba_columns) <= len(keep_columns)): 
         logger.info(f"Assuming {metadata_file} is already in peroba format")
         df = df0[keep_columns]
@@ -67,7 +67,8 @@ def update_metadata (metadata_file, defaults, alignment = None, csvfile = None, 
         df = convert_from_epidem_metadata (df0)
         if (entry_timestamp is None): timestamp = str(timestamp) + ".1"
 
-    df0 = pd.read_csv (metadata_file, compression="infer", sep=",", dtype='unicode') ## COGUK is csv
+    if (df is None):
+        df0 = pd.read_csv (metadata_file, compression="infer", sep=None, engine="python", dtype='unicode') ## COGUK is csv
     keep_columns = [x for x in coguk_columns if x in df0.columns]
     if (df is None and len(coguk_columns) - len(keep_columns) < 2): 
         logger.info(f"{metadata_file} looks like COGUK metadata file")
@@ -78,9 +79,9 @@ def update_metadata (metadata_file, defaults, alignment = None, csvfile = None, 
         logger.warning("Could not convert metadata; column with the sequence names not found or unrecognised")
         sys.exit(1)
 
-    df.loc[:,("strain")] = df["strain"].apply(clean_gisaid_name) ##  "value is trying to be set on a copy of a slice" complaint
+    df["strain"] = df["strain"].apply(clean_gisaid_name) ##  "value is trying to be set on a copy of a slice" complaint
     if (timestamp is not None):
-        df.loc[:,("timestamp")] = timestamp
+        df["timestamp"] = timestamp
     logger.info("Read %d rows from new table", df.shape[0])
 
     # merge current and new metadata iff both seq name and gisaid ID are the same 
@@ -113,7 +114,7 @@ def update_metadata (metadata_file, defaults, alignment = None, csvfile = None, 
                     len(aln_seqnames), df.shape[0], errfile)
 
 
-    keep_columns = [x for x in peroba_columns if x in df.columns] + ["timestamp"]
+    keep_columns = [x for x in peroba_columns if x in df.columns]
     df = df[keep_columns] # reorder columns
     logger.info (f"Saving peroba metadata file into {output}")
     df.to_csv (output, sep="\t", index=False)
@@ -135,6 +136,7 @@ def convert_from_gisaid_metadata (df0):
     for old, new in rename_dict.items():
         if old in df.columns and new not in df.columns:
             df.rename(columns={old:new}, inplace=True)
+    df = df.replace(r'^\s*$', np.nan, regex=True) ## replace empty strings for NaN 
 
     ## add missing columns with empty data, to be able to merge
     missing_columns = [x for x in peroba_columns if x not in df.columns]
