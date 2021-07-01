@@ -19,12 +19,18 @@ def run_align (args):
     from perobarosa import task_seq
     if args.reference: defaults["reference"] = args.reference
 
-    if args.ambiguous is None: args.ambiguous = 0.1 
-    if args.length is None: args.length = 28000 
+    if args.ambiguous is None: args.ambiguous = 0.3 
+    if args.length is None: args.length = 25000 
     if args.length < 10000: 
-        logger.warning (f"Length {args.length} is way too short for genome alignment; changing to default 28k");
-        args.length = 28000
+        logger.warning (f"Length {args.length} is way too short for genome alignment; changing to default 25k");
+        args.length = 25000
     task_seq.align (args.fasta, defaults, args.alignments, args.csv, args.output, int(args.length), float(args.ambiguous))
+
+def run_update_metadata (args):
+    from perobarosa import task_csv
+    if args.timestamp is not None and not args.timestamp.isdigit():
+        logger.warning(f"provided timestamp '{args.timestamp}' is not numeric, may cause problems downstream. Ideally it would be a YearMonthDay")
+    task_csv.update_metadata (args.metadata, defaults, args.alignments, args.csv, args.output, args.timestamp)
 
 class ParserWithErrorHelp(argparse.ArgumentParser):
     def error(self, message):
@@ -50,10 +56,18 @@ def main():
     up_aln.add_argument('-a', '--alignments', metavar='aln', nargs="+", help="optional files with aligned sequences")
     up_aln.add_argument('-r', '--reference', metavar='fas', help="optional file with reference genome (default=MN908947.3)")
     up_aln.add_argument('-c', '--csv', metavar='csv[.gz]', nargs="+", help="optional files with list of sequences to exclude (usually from previous round)")
-    up_aln.add_argument('-o', '--output', metavar='aln', help="incremental output alignment (i.e. only new sequences)")
-    up_aln.add_argument('-A', '--ambiguous', metavar='float', help="maximum allowed ambiguity (non-ACGT) for uvaia (default = 0.1)")
-    up_aln.add_argument('-l', '--length', metavar='int', help="exclude sequences shorter than this (default = 28k)")
+    up_aln.add_argument('-o', '--output', metavar='aln', help="optional file name of incremental output alignment (i.e. only new sequences)")
+    up_aln.add_argument('-A', '--ambiguous', metavar='float', help="maximum allowed ambiguity (non-ACGT) for uvaia (default = 0.3)")
+    up_aln.add_argument('-l', '--length', metavar='int', help="exclude sequences shorter than this (default = 25k)")
     up_aln.set_defaults(func = run_align)
+
+    up_aln = subp.add_parser('update_metadata', help="extract minimal metadata fom GISAID (fixing sequence names), adding to existing metadata")
+    up_aln.add_argument('metadata', metavar = "tsv[.gz]", help="metadata_tsv file from GISAID (may have spaces in sequence names")
+    up_aln.add_argument('-a', '--alignments', metavar='aln', nargs="+", help="optional files with aligned sequences from which samples are selected")
+    up_aln.add_argument('-c', '--csv', metavar='csv[.gz]', help="optional existing gisaid_meta table (usually from previous round)")
+    up_aln.add_argument('-o', '--output', metavar='tsv', help="optional custom output file")
+    up_aln.add_argument('-t', '--timestamp', help="optional timestamp for new entries. You can safely ignore it, otherwise use format YYMMDD")
+    up_aln.set_defaults(func = run_update_metadata)
 
     args = parser.parse_args()
 

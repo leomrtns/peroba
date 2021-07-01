@@ -31,7 +31,7 @@ def align (fastafile, defaults, alignment = None, csv = None, output = None, len
             aln_seqnames.update(df["taxon"].unique())
 
     logger.info("Reading fasta file %s and store incrementally (i.e. not already aligned)", fastafile)
-    sequences, invalid = read_fasta_new_only (fastafile, aln_seqnames, length, ambiguous)
+    sequences, invalid = read_fasta_new_only (fastafile, aln_seqnames, length, ambiguous, check_name=True)
     n_seqs = len(sequences)
     if not n_seqs: 
         logger.warning ("No new sequences found in %s (empty file or all included in alignments)", fastafile)

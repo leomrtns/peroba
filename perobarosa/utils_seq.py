@@ -12,14 +12,17 @@ stream_log.setFormatter(log_format)
 stream_log.setLevel(logging.INFO)
 logger.addHandler(stream_log)
 
+def clean_gisaid_name (description):
+    seqname = re.sub("\s+","", description.split("|")[0])
+    seqname = seqname.replace("'","-") # Coted-Ivoire
+    return seqname.replace("hCoV-19/","")
 
 def read_fasta_headers (filename, check_name = False):
     seqnames = []
     with open_anyformat (filename, "r") as handle:
         for record in SeqIO.parse(handle, "fasta"):
             if (check_name and "|" in record.description): # consensus from COGUK and GISAID names: `hCoV-19/Australia/NT12/2020|EPI_ISL_426900|2020-03-25`
-                seqname = record.description.split("|")[0]
-                record.id = seqname.replace("hCoV-19/","")
+                record.id = clean_gisaid_name (record.description) 
             seqnames.append(record.id)
     logger.info("Read %s sequence names from file %s", str(len(seqnames)), filename)
     return seqnames 
@@ -30,19 +33,20 @@ def read_fasta_as_list (filename, fragment_size = 0, check_name = False):
         for record in SeqIO.parse(handle, "fasta"):
             record.seq  = Seq.Seq(str(record.seq.upper()).replace(".","N")) # one damn sequence has dots 
             if (check_name and "|" in record.description): # consensus from COGUK and GISAID names: `hCoV-19/Australia/NT12/2020|EPI_ISL_426900|2020-03-25`
-                seqname = record.description.split("|")[0]
-                record.id = seqname.replace("hCoV-19/","")
+                record.id = clean_gisaid_name (record.description) 
             if len(record.seq) > fragment_size:
                 unaligned.append(record)
     logger.info("Read %s sequences from file %s", str(len(unaligned)), filename)
     return unaligned
 
-def read_fasta_new_only (fastafile, prev_seqnames, min_length, ambig):
+def read_fasta_new_only (fastafile, prev_seqnames = [], min_length = 10000, ambig = 0.8, check_name = False):
     sequences = []
     invalid = {"taxon":[],"excluded":[]}
     n_valid = 0
     with open_anyformat (fastafile, "r") as handle:
         for record in SeqIO.parse(handle, "fasta"):
+            if (check_name and "|" in record.description): # consensus from COGUK and GISAID names: `hCoV-19/Australia/NT12/2020|EPI_ISL_426900|2020-03-25`
+                record.id = clean_gisaid_name (record.description) 
             if record.id not in prev_seqnames:
                 this_len = len(record.seq)
                 if this_len > min_length:
@@ -188,6 +192,6 @@ def open_anyformat (fname, mode = "r"):
     elif fname.endswith(".xz"):  this_open = lzma.open
     else:  
         this_open = open
-        if (mode == "w"): openmode = "w"  ## only raw file for writting doesn't need "wb"
+#      if (mode == "w"): openmode = "w"  ## only raw file for writting doesn't need "wb"
     return this_open (fname, openmode) 
 
