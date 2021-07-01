@@ -46,8 +46,8 @@ def update_metadata (metadata_file, defaults, alignment = None, csvfile = None, 
         csv = csv.replace(r'^\s*$', np.nan, regex=True) ## replace empty strings for NaN s.t. new file can overwrite it
 
     # read new file from GISAID package / GISAID epidem / COGUK
-    df0 = pd.read_csv (metadata_file, compression="infer", sep="\t", dtype='unicode')
     df = None
+    df0 = pd.read_csv (metadata_file, compression="infer", sep="\t", dtype='unicode')
 
     keep_columns = [x for x in peroba_columns + ["timestamp"] if x in df0.columns]
     if (len(peroba_columns) <= len(keep_columns)): 
@@ -67,6 +67,7 @@ def update_metadata (metadata_file, defaults, alignment = None, csvfile = None, 
         df = convert_from_epidem_metadata (df0)
         if (entry_timestamp is None): timestamp = str(timestamp) + ".1"
 
+    df0 = pd.read_csv (metadata_file, compression="infer", sep=",", dtype='unicode') ## COGUK is csv
     keep_columns = [x for x in coguk_columns if x in df0.columns]
     if (df is None and len(coguk_columns) - len(keep_columns) < 2): 
         logger.info(f"{metadata_file} looks like COGUK metadata file")
@@ -90,7 +91,7 @@ def update_metadata (metadata_file, defaults, alignment = None, csvfile = None, 
         l2 = csv.shape[0]
         df = csv.combine_first (df) ## df will only be added if absent from csv
         df.reset_index(drop=True, inplace=True)
-        logger.info("Current table has %d rows, new table has %d rows, with %d common ones", l1, l2, l1 + l2 - df.shape[0]);
+        logger.info("Current table has %d rows, new table will have %d rows, with %d common ones. ", l1, df.shape[0], l1 + l2 - df.shape[0]);
 
     # check if several rows may have same sequence name
     n_unique = df.shape[0] - len(df["strain"].unique())
@@ -114,6 +115,7 @@ def update_metadata (metadata_file, defaults, alignment = None, csvfile = None, 
 
     keep_columns = [x for x in peroba_columns if x in df.columns] + ["timestamp"]
     df = df[keep_columns] # reorder columns
+    logger.info (f"Saving peroba metadata file into {output}")
     df.to_csv (output, sep="\t", index=False)
     return
 

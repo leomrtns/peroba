@@ -115,7 +115,7 @@ def uvaia_align_seqs (sequences=None, ambiguous=None, infile = None, outfile = N
     if prefix is None: prefix = "./"
     if infile is None: ifl = f"{prefix}{uniq}.fasta.gz"  # save as gz since uvaia can handle it
     else: ifl = infile # if both infile and sequences are present, it will save (overwrite) infile
-    if outfile is None or outfile is "FILE": ofl = f"{prefix}{uniq}uvaia.aln" # create file but not delete it, instead returning it
+    if outfile is None or outfile == "FILE": ofl = f"{prefix}{uniq}uvaia.aln" # create file but not delete it, instead returning it
     else: ofl = outfile 
     if (ambiguous is None): ambiguous = 0.1
 
@@ -129,7 +129,7 @@ def uvaia_align_seqs (sequences=None, ambiguous=None, infile = None, outfile = N
 
     if infile is None:  os.system("rm -f " + ifl)
     if outfile is None: os.system("rm -f " + ofl)
-    if outfile is "FILE": return ofl
+    if outfile == "FILE": return ofl
     else:                 return aligned
 
 def calc_freq_N_from_string (genome):
