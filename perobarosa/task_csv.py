@@ -106,7 +106,7 @@ def update_metadata (metadata_file, defaults, alignment = None, csvfile = None, 
         logger.info("keeping only rows from samples present in alignment")
         df = df[ df["strain"].isin(aln_seqnames) ]
         if (df.shape[0] < len(aln_seqnames)):
-            errfile = defaults["current_dir"] + "gisaid_meta-missing_rows." +  defaults["timestamp"] + ".txt"
+            errfile = defaults["current_dir"] + "peroba_meta-missing_rows." +  defaults["timestamp"] + ".txt"
             with open_anyformat(errfile, "w") as fw:
                 for seqname in set(aln_seqnames - set(df["strain"].unique())):
                     fw.write(str(f"{seqname}\n").encode())
