@@ -19,17 +19,6 @@ def update_metadata (metadata_file, defaults, alignment = None, csvfile = None, 
     if output is None: output = defaults["current_dir"] + "peroba_meta." +  defaults["timestamp"] + ".tsv.xz"
     if entry_timestamp is None: timestamp = datetime.datetime.now().strftime("%y%m%d")
     else:                       timestamp = str(entry_timestamp)
-  
-    # read existing alignments
-    aln_seqnames = set()
-    if alignment is None: logger.info (f"No alignment given; will output all entries")
-    else:                 
-        logger.info (f"Will output only entries present in alignments")
-        for aln in alignment:
-            logger.debug(f"Reading alignment {aln}") 
-            aln_seqnames.update(read_fasta_headers (aln))
-        aln_seqnames = set (aln_seqnames) ## much faster lookup than list
-        logger.info("Total of %d aligned sequences", len(aln_seqnames))
 
     # read existing metadata file (we assume names are clean, i.e. valid fasta headers and same as in fasta file) 
     csv = None
@@ -102,17 +91,28 @@ def update_metadata (metadata_file, defaults, alignment = None, csvfile = None, 
         dup_seqs = collections.Counter(df["strain"]).most_common(10)
         logger.info("Examples of duplicate names:\n%s   etc.\n", "\n".join([x[0] for x in dup_seqs]))
 
-    if (len(aln_seqnames)):
-        logger.info("keeping only rows from samples present in alignment")
-        df = df[ df["strain"].isin(aln_seqnames) ]
-        if (df.shape[0] < len(aln_seqnames)):
-            errfile = defaults["current_dir"] + "peroba_meta-missing_rows." +  defaults["timestamp"] + ".txt"
-            with open_anyformat(errfile, "w") as fw:
-                for seqname in set(aln_seqnames - set(df["strain"].unique())):
-                    fw.write(str(f"{seqname}\n").encode())
-            logger.warning ("Some sequences don't have metadata: %d sequences but only %d table rows. List of sequences with missing metadata on file %s", 
-                    len(aln_seqnames), df.shape[0], errfile)
-
+    # read existing alignments
+    aln_seqnames = set()
+    if alignment is None: logger.warning (f"No alignment given; will output all entries")
+    else:                 
+        logger.info (f"Reading alignments may take a while")
+        for aln in alignment:
+            logger.debug(f"Reading alignment {aln}") 
+            aln_seqnames.update(read_fasta_headers (aln))
+        aln_seqnames = set (aln_seqnames) ## much faster lookup than list
+        logger.info("Total of %d aligned sequences", len(aln_seqnames))
+        if (len(aln_seqnames)):
+            logger.warning("Keeping only rows from samples present in alignment")
+            df = df[ df["strain"].isin(aln_seqnames) ]
+            missing_seqs = set(aln_seqnames - set(df["strain"].unique()))
+            if (len(missing_seqs) > 0):
+                errfile = defaults["current_dir"] + "peroba_meta-missing_rows." +  defaults["timestamp"] + ".txt"
+                logger.warning ("There are %d aligned sequences without metadata. List of sequences being saved to file %s", len(missing_seqs), errfile)
+                with open_anyformat(errfile, "w") as fw:
+                    for seqname in missing_seqs: 
+                        fw.write(str(f"{seqname}\n").encode())
+        else:
+            logger.warning ("No sequence names found in alignments; metadata will have all rows")
 
     keep_columns = [x for x in peroba_columns if x in df.columns]
     df = df[keep_columns] # reorder columns
@@ -209,108 +209,3 @@ def convert_from_coguk_metadata (df0):
         return None # allows for another format conversion to be tried 
     return df[peroba_columns] ## remove other columns
         
-        
-def update_metadata_BKP (metadata_file, defaults, alignment = None, csvfile = None, output = None, entry_timestamp = None):
-    if output is None: output = defaults["current_dir"] + "gisaid_meta." +  defaults["timestamp"] + ".tsv.gz"
-    if entry_timestamp is None: entry_timestamp = datetime.datetime.now().strftime("%y%m%d")
-  
-    # read existing alignments
-    aln_seqnames = set()
-    if alignment is None: logger.info (f"No alignment given; will output all entries")
-    else:                 
-        logger.info (f"Will output only entries present in alignments")
-        for aln in alignment:
-            logger.debug(f"Reading alignment {aln}") 
-            aln_seqnames.update(read_fasta_headers (aln))
-        aln_seqnames = set (aln_seqnames) ## much faster lookup than list
-        logger.info("Total of %d aligned sequences", len(aln_seqnames))
-
-    # read existing metadata file (we assume names are clean, i.e. valid fasta headers and same as in fasta file) 
-    if (csvfile is not None):
-        csv = pd.read_csv (csvfile, compression="infer", sep="\t", dtype='unicode')
-        keep_columns = [x for x in gisaid_keep_columns if x in csv.columns]
-        if (len(keep_columns) < len(gisaid_keep_columns)): 
-            logger.error ("Existing table %s does not look like an updated metadata file, missing at least one column from\n %s",csvfile, "\n".join(gisaid_keep_columns))
-            sys.exit(1)
-        if ("Virus name" not in keep_columns):
-            logger.error (f"Column 'Virus name' missing from existing table file ({csvfile} must be from previous call of peroba)")
-            sys.exit(1)
-        csv = csv[keep_columns]  ## reorder s.t. Virus name comes first etc
-        csv = csv.replace(r'^\s*$', np.nan, regex=True) ## replace empty strings for NaN s.t. new file can overwrite it
-
-    # read new file from GISAID
-    df = pd.read_csv (metadata_file, compression="infer", sep="\t", dtype='unicode')
-    keep_columns = [x for x in gisaid_keep_columns if x in df.columns]
-    if (len(keep_columns) < 2): 
-        logger.warning(f"{metadata_file} does not look like GISAID metadata file from default 'package'")
-        df, keep_columns = convert_from_gisaid_epidemiology_metadata (df)
-        if (len(keep_columns) < 2): 
-            logger.error ("Conversion did not work, I do not recognise this metadata file")
-            sys.exit(1)
-    if ("Virus name" not in keep_columns):
-        logger.error ("Column 'Virus name' missing from metadata file, probably not the default GISAID tsv")
-        sys.exit(1)
-    df = df[keep_columns]
-    df["Virus name"] = df["Virus name"].apply(clean_gisaid_name)
-    df["peroba_timestamp"] = entry_timestamp
-
-    # merge current and new metadata iff both seq name and gisaid ID are the same 
-    if (csv.shape[0] > 0):
-        df.set_index(["Virus name", "Accession ID"], inplace=True, append=False, drop=False) ## append removes current index (lame counter) 
-        csv.set_index(["Virus name", "Accession ID"], inplace=True, append=False, drop=False) ## drop removes column, thus drop=F keeps both
-        l1 = df.shape[0]
-        l2 = csv.shape[0]
-        df = csv.combine_first (df) ## df will only be added if absent from csv
-        df.reset_index(drop=True, inplace=True)
-        logger.info("Current table has %d rows, new GISAID table has %d rows, with %d common ones", l1, l2, l1 + l2 - df.shape[0]);
-
-    # check if several rows may have same sequence name
-    n_unique = df.shape[0] - len(df["Virus name"].unique())
-    if (n_unique > 0): 
-        logger.warning((f"{n_unique} rows have same name, bad practice by GISAID but not a bug;" 
-                "fasta file may cause other software to complain (although 'peroba align' dedups by default)"))
-        dup_seqs = collections.Counter(df["Virus name"]).most_common(10)
-        logger.info("Example of duplicate names:\n%s   etc.\n", "\n".join([x[0] for x in dup_seqs]))
-
-    if (len(aln_seqnames)):
-        logger.info("keeping only rows from samples present in alignment")
-        df = df[ df["Virus name"].isin(aln_seqnames) ]
-        if (df.shape[0] < len(aln_seqnames)):
-            errfile = defaults["current_dir"] + "gisaid_meta-missing_rows." +  defaults["timestamp"] + ".txt"
-            with open_anyformat(errfile, "w") as fw:
-                for seqname in set(aln_seqnames - set(df["Virus name"].unique())):
-                    fw.write(str(f"{seqname}\n").encode())
-            logger.warning ("Some sequences don't have metadata: %d sequences but only %d table rows. Sequences with missing metadata on file %s", 
-                    len(aln_seqnames), df.shape[0], errfile)
-
-
-    keep_columns = [x for x in gisaid_keep_columns if x in df.columns]
-    df = df[keep_columns] # reorder columns
-    df.to_csv (output, sep="\t", index=False)
-    return
-
-def convert_from_gisaid_epidemiology_metadata_BKP (df):
-    rename_dict = {
-            "strain":"Virus name", 
-            "gisaid_epi_isl":"Accession ID",
-            "date":"Collection date", 
-            "age":"Patient age", 
-            "sex":"Gender", 
-            "GISAID_clade":"Clade", 
-            "pango_lineage":"Pango lineage"
-            }
-    logger.warning ("Will convert columns, assuming metadata comes from GISAID's epidemiology file");
-    for old, new in rename_dict.items():
-        if old in df.columns and new not in df.columns:
-            df.rename(columns={old:new}, inplace=True)
-    valid_cols = [x for x in ["region","country","division"] if x in df.columns]
-    if (len(valid_cols) == 3):
-        df["Location"] = df["region"] + "/" + df["country"] + "/" + df["division"]
-    valid_cols = [x for x in ["region_exposure","country_exporsure","division_exposure"] if x in df.columns]
-    if (len(valid_cols) == 3):
-        df["Additional location information"] = df["region_exposure"] + "/" + df["country_exporsure"] + "/" + df["division_exposure"]
-
-    # extra columns (like "country" etc.) will be removed later, by df=df[keep_columns]
-    keep_columns = [x for x in gisaid_keep_columns if x in df.columns]
-    return df, keep_columns 
-

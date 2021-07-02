@@ -26,7 +26,7 @@ def run_align (args):
         args.length = 25000
     task_seq.align (args.fasta, defaults, args.alignments, args.csv, args.output, int(args.length), float(args.ambiguous))
 
-def run_update_metadata (args):
+def run_metadata (args):
     from perobarosa import task_csv
     if args.timestamp is not None and not args.timestamp.isdigit():
         logger.warning(f"provided timestamp '{args.timestamp}' is not numeric, may cause problems downstream. Ideally it would be a YearMonthDay")
@@ -44,7 +44,7 @@ def main():
     #peroba top level
     #""") 
 
-    parser.add_argument('-d', '--debug', action="store_const", dest="loglevel", const=logging.DEBUG, default=logging.WARNING, help="Print debugging statements")
+    parser.add_argument('-d', '--debug', action="store_const", dest="loglevel", const=logging.DEBUG, default=logging.WARNING, help="Print debugging statements (most verbose)")
     parser.add_argument('-v', '--verbose', action="store_const", dest="loglevel", const=logging.INFO, help="Add verbosity")
     parser.add_argument('-t', '--nthreads', metavar='int', help="Number of threads requested (default = maximum available)")
     parser.add_argument('--outdir', action="store", help="Output database directory. Default: working directory")
@@ -61,13 +61,13 @@ def main():
     up_aln.add_argument('-l', '--length', metavar='int', help="exclude sequences shorter than this (default = 25k)")
     up_aln.set_defaults(func = run_align)
 
-    up_aln = subp.add_parser('update_metadata', help="extract minimal metadata fom GISAID (fixing sequence names), adding to existing metadata")
+    up_aln = subp.add_parser('metadata', help="extract minimal metadata fom GISAID (fixing sequence names), adding to existing metadata")
     up_aln.add_argument('metadata', metavar = "tsv[.gz]", help="metadata_tsv file from GISAID (may have spaces in sequence names")
     up_aln.add_argument('-a', '--alignments', metavar='aln', nargs="+", help="optional files with aligned sequences from which samples are selected")
     up_aln.add_argument('-c', '--csv', metavar='csv[.gz]', help="optional existing gisaid_meta table (usually from previous round)")
     up_aln.add_argument('-o', '--output', metavar='tsv', help="optional custom output file")
     up_aln.add_argument('-t', '--timestamp', help="optional timestamp for new entries. You can safely ignore it, otherwise use format YYMMDD")
-    up_aln.set_defaults(func = run_update_metadata)
+    up_aln.set_defaults(func = run_metadata)
 
     args = parser.parse_args()
 

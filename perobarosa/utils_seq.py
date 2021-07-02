@@ -12,6 +12,9 @@ stream_log.setFormatter(log_format)
 stream_log.setLevel(logging.INFO)
 logger.addHandler(stream_log)
 
+# GISAID sequence names for non-humans start with following prefixes (like hCoV-19/env, hCoV-19/mink etc):
+non_human_prefix = ["canine", "leopard", "monkey", "hamster", "gorilla", "mouse", "tiger", "bat", "pangolin", "lion", "dog", "cat", "mink", "env"]
+
 def clean_gisaid_name (description):
     seqname = re.sub("\s+","", description.split("|")[0])
     seqname = seqname.replace("'","-") # Coted-Ivoire

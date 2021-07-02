@@ -12,7 +12,7 @@ logger.addHandler(stream_log)
 
 def align (fastafile, defaults, alignment = None, csv = None, output = None, length = 20000, ambiguous = 0.1):
     reference = defaults["reference"]
-    if output is None: output = defaults["current_dir"] + "incremental." +  defaults["timestamp"] + ".aln.xz"
+    if output is None: output = defaults["current_dir"] + "peroba_align." +  defaults["timestamp"] + ".aln.xz"
     if ambiguous is None or ambiguous > 0.9: ambiguous = 0.1
     logger.info (f"Will exclude sequences with proportion of Ns higher than {ambiguous} or shorter than {length}");
 
@@ -37,7 +37,7 @@ def align (fastafile, defaults, alignment = None, csv = None, output = None, len
         logger.warning ("No new sequences found in %s (empty file or all included in alignments)", fastafile)
         return
     if (len(invalid)):
-        outcsv = defaults["current_dir"] + "excluded." +  defaults["timestamp"] + ".csv.gz"
+        outcsv = defaults["current_dir"] + "peroba_align-excluded." +  defaults["timestamp"] + ".csv.gz"
         logger.info(f"Saving list of sequences failing QC to {outcsv} table") 
         invalid.to_csv (outcsv, index=False)
     
