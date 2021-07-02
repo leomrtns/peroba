@@ -23,6 +23,7 @@ def update_metadata (metadata_file, defaults, alignment = None, csvfile = None, 
     # read existing metadata file (we assume names are clean, i.e. valid fasta headers and same as in fasta file) 
     csv = None
     if (csvfile is not None):
+        logger.info(f"Reading {csvfile} from previous round of peroba metadata")
         csv = pd.read_csv (csvfile, compression="infer", sep="\t", dtype='unicode')
         keep_columns = [x for x in peroba_columns  if x in csv.columns]
         if (len(keep_columns) < len(peroba_columns)): 
@@ -36,6 +37,7 @@ def update_metadata (metadata_file, defaults, alignment = None, csvfile = None, 
 
     # read new file from GISAID package / GISAID epidem / COGUK
     df = None
+    logger.info(f"Reading {metadata_file} with new entries")
     df0 = pd.read_csv (metadata_file, compression="infer", sep="\t", dtype='unicode')
 
     keep_columns = [x for x in peroba_columns if x in df0.columns]
@@ -75,8 +77,8 @@ def update_metadata (metadata_file, defaults, alignment = None, csvfile = None, 
 
     # merge current and new metadata iff both seq name and gisaid ID are the same 
     if (csv is not None and csv.shape[0] > 0):
-        df.set_index(["strain", "gisaid_id"], inplace=True, append=False, drop=False) ## append removes current index (lame counter) 
-        csv.set_index(["strain", "gisaid_id"], inplace=True, append=False, drop=False) ## drop removes column, thus drop=F keeps both
+        df.set_index(["strain", "gisaid_id"], sort=False, inplace=True, append=False, drop=False) ## append removes current index (lame counter) 
+        csv.set_index(["strain", "gisaid_id"], sort=False, inplace=True, append=False, drop=False) ## drop removes column, thus drop=F keeps both
         l1 = df.shape[0]
         l2 = csv.shape[0]
         df = csv.combine_first (df) ## df will only be added if absent from csv
