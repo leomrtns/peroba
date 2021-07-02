@@ -16,7 +16,7 @@ defaults = {
     }
 
 def run_align (args):
-    from perobarosa import task_seq
+    from perobarosa import task_align
     if args.reference: defaults["reference"] = args.reference
 
     if args.ambiguous is None: args.ambiguous = 0.3 
@@ -24,13 +24,13 @@ def run_align (args):
     if args.length < 10000: 
         logger.warning (f"Length {args.length} is way too short for genome alignment; changing to default 25k");
         args.length = 25000
-    task_seq.align (args.fasta, defaults, args.alignments, args.csv, args.output, int(args.length), float(args.ambiguous))
+    task_align.align (args.fasta, defaults, args.alignments, args.csv, args.output, int(args.length), float(args.ambiguous))
 
 def run_metadata (args):
-    from perobarosa import task_csv
+    from perobarosa import task_metadata
     if args.timestamp is not None and not args.timestamp.isdigit():
         logger.warning(f"provided timestamp '{args.timestamp}' is not numeric, may cause problems downstream. Ideally it would be a YearMonthDay")
-    task_csv.update_metadata (args.metadata, defaults, args.alignments, args.csv, args.output, args.timestamp)
+    task_metadata.metadata (args.metadata, defaults, args.alignments, args.csv, args.output, args.timestamp)
 
 class ParserWithErrorHelp(argparse.ArgumentParser):
     def error(self, message):

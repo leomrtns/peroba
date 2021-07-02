@@ -15,7 +15,7 @@ gisaid_columns = ["Virus name", "Accession ID", "Collection date", "Location", "
 epidem_columns = ["strain", "gisaid_epi_isl", "date", "age", "sex", "GISAID_clade", "pango_lineage", "region","country","division", "region_exposure","country_exposure","division_exposure"]
 coguk_columns = ['sequence_name', 'gisaid_id', 'sample_date', 'country', 'adm1', 'NUTS1', 'source_age', 'source_sex','travel_history', 'lineage']
 
-def update_metadata (metadata_file, defaults, alignment = None, csvfile = None, output = None, entry_timestamp = None):
+def metadata (metadata_file, defaults, alignment = None, csvfile = None, output = None, entry_timestamp = None):
     if output is None: output = defaults["current_dir"] + "peroba_meta." +  defaults["timestamp"] + ".tsv.xz"
     if entry_timestamp is None: timestamp = datetime.datetime.now().strftime("%y%m%d")
     else:                       timestamp = str(entry_timestamp)
