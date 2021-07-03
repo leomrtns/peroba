@@ -77,11 +77,11 @@ def metadata (metadata_file, defaults, alignment = None, csvfile = None, output 
 
     # merge current and new metadata iff both seq name and gisaid ID are the same 
     if (csv is not None and csv.shape[0] > 0):
-        df.set_index(["strain", "gisaid_id"], sort=False, inplace=True, append=False, drop=False) ## append removes current index (lame counter) 
-        csv.set_index(["strain", "gisaid_id"], sort=False, inplace=True, append=False, drop=False) ## drop removes column, thus drop=F keeps both
+        df.set_index(["strain", "gisaid_id"], inplace=True, append=False, drop=False) ## append removes current index (lame counter) 
+        csv.set_index(["strain", "gisaid_id"], inplace=True, append=False, drop=False) ## drop removes column, thus drop=F keeps both
         l1 = df.shape[0]
         l2 = csv.shape[0]
-        df = csv.combine_first (df) ## df will only be added if absent from csv
+        df = csv.combine_first (df) ## df will only be added if absent from csv ## python suggests "sort=False" here
         df.reset_index(drop=True, inplace=True)
         logger.info("Current table has %d rows, new table will have %d rows, with %d common ones. ", l1, df.shape[0], l1 + l2 - df.shape[0]);
 
