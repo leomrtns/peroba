@@ -32,6 +32,16 @@ def run_metadata (args):
         logger.warning(f"provided timestamp '{args.timestamp}' is not numeric, may cause problems downstream. Ideally it would be a YearMonthDay")
     task_metadata.metadata (args.metadata, defaults, args.alignments, args.csv, args.output, args.timestamp)
 
+def run_merge (args):
+    from perobarosa import task_metadata
+    if (args.csv is None):
+        logger.error("Missing tsv file with metadata")
+        sys.exit(2)
+    if (args.alignments is None):
+        logger.error("Missing alignment files (may be several, if incremental)")
+        sys.exit(2)
+    task_metadata.merge (args.csv, args.alignments, defaults)
+
 class ParserWithErrorHelp(argparse.ArgumentParser):
     def error(self, message):
         sys.stderr.write('error: %s\n' % message)
@@ -68,6 +78,11 @@ def main():
     up_aln.add_argument('-o', '--output', metavar='tsv', help="optional custom output file")
     up_aln.add_argument('-t', '--timestamp', help="optional timestamp for new entries. You can safely ignore it, otherwise use format YYMMDD")
     up_aln.set_defaults(func = run_metadata)
+
+    up_aln = subp.add_parser('merge', help="merge metadata and alignment ")
+    up_aln.add_argument('-a', '--alignments', metavar='aln', nargs="+", help="files with aligned sequences from which samples are selected")
+    up_aln.add_argument('-c', '--csv', metavar='csv[.gz]', help="gisaid_meta table")
+    up_aln.set_defaults(func = run_merge)
 
     args = parser.parse_args()
 

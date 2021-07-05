@@ -210,4 +210,24 @@ def convert_from_coguk_metadata (df0):
         logger.error ("Column 'strain' is missing from metadata file")
         return None # allows for another format conversion to be tried 
     return df[peroba_columns] ## remove other columns
+       
+
+def merge (metadata, alignment, defaults):
+    csv_ofile = defaults["current_dir"] + "perobaDB." +  defaults["timestamp"] + ".tsv.xz"
+    aln_ofile = defaults["current_dir"] + "perobaDB." +  defaults["timestamp"] + ".aln.xz"
+    aln_efile = defaults["current_dir"] + "perobaDB-excluded." +  defaults["timestamp"] + ".aln.xz"
+    csv = pd.read_csv (metadata, compression="infer", sep="\t", dtype='unicode')
+
+    csv.set_index(["strain"], inplace=True, append=False, drop=False) ## drop removes column, thus drop=F keeps both
+    ofl = open_anyformat (aln_ofile, "w")
+    efl = open_anyformat (aln_efile, "w") 
+    logger.info(f"Selected sequences will be saved to {aln_ofile} and excluded will be saved to {aln_efile}")
+    for aln in alignment:
+        logger.debug(f"Reading alignment {aln}") 
+        df = partition_fasta_by_list (aln, ofl, efl, include_list):
+        csv = csv.combine_first (df) ## df will only be added if absent from csv ## python suggests "sort=False" here
+    ofl.close()
+    efl.close()
         
+    csv.reset_index(drop=True, inplace=True)
+    csv.to_csv (csv_ofile, sep="\t", index=False)
