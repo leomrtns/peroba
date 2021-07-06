@@ -10,6 +10,7 @@ stream_log.setFormatter(log_format)
 stream_log.setLevel(logging.INFO)
 logger.addHandler(stream_log)
 
+peroba_xtracol = ["freq_ACGT", "freq_N", "seq_hash"]
 peroba_columns = ["strain", "gisaid_id", "date", "location", "location_gisaid", "location_coguk", "age", "gender", "gisaid_clade", "pango_lineage", "timestamp"]
 gisaid_columns = ["Virus name", "Accession ID", "Collection date", "Location", "Additional location information", "Patient age", "Gender", "Clade", "Pango lineage"]
 epidem_columns = ["strain", "gisaid_epi_isl", "date", "age", "sex", "GISAID_clade", "pango_lineage", "region","country","division", "region_exposure","country_exposure","division_exposure"]
@@ -27,7 +28,7 @@ def metadata (metadata_file, defaults, alignment = None, csvfile = None, output 
         csv = pd.read_csv (csvfile, compression="infer", sep="\t", dtype='unicode')
         keep_columns = [x for x in peroba_columns  if x in csv.columns]
         if (len(keep_columns) < len(peroba_columns)): 
-            logger.error ("Existing table %s does not look like a peroba metadata file, missing at least one column from\n %s",csvfile, "\n".join(gisaid_keep_columns))
+            logger.error ("Existing table %s does not look like a peroba metadata file, missing at least one column from\n %s",csvfile, "\n".join(peroba_columns))
             sys.exit(1)
         if ("strain" not in keep_columns):
             logger.error (f"Column 'strain' missing from existing table file ({csvfile} must be from previous call to peroba)")
@@ -216,18 +217,36 @@ def merge (metadata, alignment, defaults):
     csv_ofile = defaults["current_dir"] + "perobaDB." +  defaults["timestamp"] + ".tsv.xz"
     aln_ofile = defaults["current_dir"] + "perobaDB." +  defaults["timestamp"] + ".aln.xz"
     aln_efile = defaults["current_dir"] + "perobaDB-excluded." +  defaults["timestamp"] + ".aln.xz"
+    logger.info(f"Reading metadata file {metadata}")
     csv = pd.read_csv (metadata, compression="infer", sep="\t", dtype='unicode')
+    keep_columns = [x for x in peroba_columns  if x in csv.columns]
+    if (len(keep_columns) < len(peroba_columns)): 
+        logger.error ("Table %s is not a peroba metadata file, missing at least one column from\n %s",csvfile, "\n".join(peroba_columns))
+        sys.exit(1)
+    # split table into rows with and without gisaid_id, and merge same ones
+    logger.info(f"Removing duplicate/redundant metadata rows")
+    old_size = csv.shape[0]
+    csv_1 = csv[csv["gisaid_id"].isnull()] 
+    csv_2 = csv[~csv["gisaid_id"].isnull()]
+    csv_2 = csv_2.groupby("gisaid_id").aggregate("first")
+    csv_2.reset_index(drop=False, inplace=True) # gisaid_id becomes a column again (drop=True would delete it)
+    csv = pd.concat([csv_1, csv_2])
+    csv = csv.groupby("strain").aggregate("first") # new key is now 'strain'
+    include_set = set(csv.index.tolist()) ## set lookup much faster than list lookup
+    logger.info(f"Metadata size decrease from {old_size} to {csv.shape[0]} rows")
 
-    csv.set_index(["strain"], inplace=True, append=False, drop=False) ## drop removes column, thus drop=F keeps both
     ofl = open_anyformat (aln_ofile, "w")
     efl = open_anyformat (aln_efile, "w") 
     logger.info(f"Selected sequences will be saved to {aln_ofile} and excluded will be saved to {aln_efile}")
     for aln in alignment:
-        logger.debug(f"Reading alignment {aln}") 
-        df = partition_fasta_by_list (aln, ofl, efl, include_list):
+        logger.info(f"Reading alignment {aln}") 
+        df = partition_fasta_by_set (aln, ofl, efl, include_set)
         csv = csv.combine_first (df) ## df will only be added if absent from csv ## python suggests "sort=False" here
     ofl.close()
     efl.close()
         
+    csv = csv[~csv["freq_ACGT"].isnull()] ## only rows with sequence information
     csv.reset_index(drop=True, inplace=True)
+    csv = csv[peroba_columns + peroba_xtracol] # reorders columns
+    logger.info(f"Saving metadata file {csv_ofile}")
     csv.to_csv (csv_ofile, sep="\t", index=False)

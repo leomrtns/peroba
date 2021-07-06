@@ -42,26 +42,26 @@ def read_fasta_as_list (filename, fragment_size = 0, check_name = False):
     logger.info("Read %s sequences from file %s", str(len(unaligned)), filename)
     return unaligned
 
-def partition_fasta_by_list (infile, ofl, efl, include_list, trim=500):
+def partition_fasta_by_set (infile, ofl, efl, include_set, trim=500):
     seq_info = dict()
     n_valid = 0
     with open_anyformat (infile, "r") as ifl:
         for record in SeqIO.parse(ifl, "fasta"):
-            if (check_name and "|" in record.description): # consensus from COGUK and GISAID names: `hCoV-19/Australia/NT12/2020|EPI_ISL_426900|2020-03-25`
+            if ("|" in record.description): # consensus from COGUK and GISAID names: `hCoV-19/Australia/NT12/2020|EPI_ISL_426900|2020-03-25`
                 record.id = clean_gisaid_name (record.description) 
-            if record.id in include_list:
+            if record.id in include_set:
                 n_valid += 1
                 if (not n_valid%250000):  logger.info(f"{n_valid} sequences saved")
                 record.seq = record.seq.upper()
                 seq_info[record.id] = [
                     sum([record.seq.count(nuc) for nuc in ["A", "C", "G", "T"]]),
                     sum([record.seq.count(nuc) for nuc in ["N", "-"]]),
-                    str(xxhash.xxh32(str(record.seq[trim:-trim])).hexdigest()))
+                    str(xxhash.xxh32(str(record.seq[trim:-trim])).hexdigest())
                 ]
                 ofl.write(str(f">{record.id}\n{record.seq}\n").encode())
             else:
                 efl.write(str(f">{record.id}\n{record.seq}\n").encode())
-    logger.info(f"{n_valid} sequences saved")
+    logger.info(f"{n_valid} sequences saved from file")
     info_df = pd.DataFrame.from_dict (seq_info, orient='index', columns = ["freq_ACGT", "freq_N", "seq_hash"])
     return info_df 
 

@@ -19,11 +19,11 @@ def run_align (args):
     from perobarosa import task_align
     if args.reference: defaults["reference"] = args.reference
 
-    if args.ambiguous is None: args.ambiguous = 0.3 
-    if args.length is None: args.length = 25000 
+    if args.ambiguous is None: args.ambiguous = 0.4
+    if args.length is None: args.length = 28000 
     if args.length < 10000: 
-        logger.warning (f"Length {args.length} is way too short for genome alignment; changing to default 25k");
-        args.length = 25000
+        logger.warning (f"Length {args.length} is way too short for genome alignment; changing to default 28k");
+        args.length = 28000
     task_align.align (args.fasta, defaults, args.alignments, args.csv, args.output, int(args.length), float(args.ambiguous))
 
 def run_metadata (args):
@@ -67,8 +67,8 @@ def main():
     up_aln.add_argument('-r', '--reference', metavar='fas', help="optional file with reference genome (default=MN908947.3)")
     up_aln.add_argument('-c', '--csv', metavar='csv[.gz]', nargs="+", help="optional files with list of sequences to exclude (usually from previous round)")
     up_aln.add_argument('-o', '--output', metavar='aln', help="optional file name of incremental output alignment (i.e. only new sequences)")
-    up_aln.add_argument('-A', '--ambiguous', metavar='float', help="maximum allowed ambiguity (non-ACGT) for uvaia (default = 0.3)")
-    up_aln.add_argument('-l', '--length', metavar='int', help="exclude sequences shorter than this (default = 25k)")
+    up_aln.add_argument('-A', '--ambiguous', metavar='float', help="maximum allowed ambiguity (non-ACGT) for uvaia (default = 0.4)")
+    up_aln.add_argument('-l', '--length', metavar='int', help="exclude sequences shorter than this (default = 28k)")
     up_aln.set_defaults(func = run_align)
 
     up_aln = subp.add_parser('metadata', help="extract minimal metadata fom GISAID (fixing sequence names), adding to existing metadata")

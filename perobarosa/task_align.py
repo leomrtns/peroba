@@ -11,7 +11,7 @@ stream_log.setLevel(logging.INFO)
 logger.addHandler(stream_log)
 
 ## hint: x.groupby("strain").aggregate("first") NaN elems of strain are not included
-def align (fastafile, defaults, alignment = None, csv = None, output = None, length = 20000, ambiguous = 0.1):
+def align (fastafile, defaults, alignment = None, csv = None, output = None, length = 28000, ambiguous = 0.1):
     reference = defaults["reference"]
     if output is None: output = defaults["current_dir"] + "peroba_align." +  defaults["timestamp"] + ".aln.xz"
     if ambiguous is None or ambiguous > 0.9: ambiguous = 0.1
