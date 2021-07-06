@@ -20,15 +20,33 @@ def clean_gisaid_name (description):
     seqname = seqname.replace("'","-") # Coted-Ivoire
     return seqname.replace("hCoV-19/","")
 
-def read_fasta_headers (filename, check_name = False):
+
+def get_extra_cols_from_record (seq, trim=500):
+    seq = seq.upper()
+    vals =  [
+            sum([seq.count(nuc) for nuc in ["A", "C", "G", "T"]]),
+            sum([seq.count(nuc) for nuc in ["N", "-"]]),
+            str(xxhash.xxh32(str(seq[trim:-trim])).hexdigest())
+            ]
+    return vals
+
+def read_fasta_headers (filename, check_name = False, trim=500, update_set = None):
     seqnames = []
+    if update_set is not None: seq_info = dict()  ## default is to calcualte only for list
+
     with open_anyformat (filename, "r") as handle:
         for record in SeqIO.parse(handle, "fasta"):
             if (check_name and "|" in record.description): # consensus from COGUK and GISAID names: `hCoV-19/Australia/NT12/2020|EPI_ISL_426900|2020-03-25`
                 record.id = clean_gisaid_name (record.description) 
             seqnames.append(record.id)
+            if update_set is not None and record.id in update_set:
+                seq_info[record.id] = get_extra_cols_from_record (record.seq, trim)
+
     logger.info("Read %s sequence names from file %s", str(len(seqnames)), filename)
-    return seqnames 
+    if update_set is None:
+        return seqnames
+    info_df = pd.DataFrame.from_dict (seq_info, orient='index', columns = ["freq_ACGT", "freq_N", "seq_hash"])
+    return seqnames, info_df 
 
 def read_fasta_as_list (filename, fragment_size = 0, check_name = False):
     unaligned = []
@@ -42,8 +60,9 @@ def read_fasta_as_list (filename, fragment_size = 0, check_name = False):
     logger.info("Read %s sequences from file %s", str(len(unaligned)), filename)
     return unaligned
 
-def partition_fasta_by_set (infile, ofl, efl, include_set, trim=500):
-    seq_info = dict()
+def partition_fasta_by_set (infile, ofl, efl, include_set, trim=500, update_set = None):
+    seq_info = dict() ## default is to calculate for all values
+    invalid = {"taxon":[],"excluded":[]}
     n_valid = 0
     with open_anyformat (infile, "r") as ifl:
         for record in SeqIO.parse(ifl, "fasta"):
@@ -52,18 +71,16 @@ def partition_fasta_by_set (infile, ofl, efl, include_set, trim=500):
             if record.id in include_set:
                 n_valid += 1
                 if (not n_valid%250000):  logger.info(f"{n_valid} sequences saved")
-                record.seq = record.seq.upper()
-                seq_info[record.id] = [
-                    sum([record.seq.count(nuc) for nuc in ["A", "C", "G", "T"]]),
-                    sum([record.seq.count(nuc) for nuc in ["N", "-"]]),
-                    str(xxhash.xxh32(str(record.seq[trim:-trim])).hexdigest())
-                ]
+                if update_set is None or record.id in update_set:
+                    seq_info[record.id] = get_extra_cols_from_record (record.seq, trim)
                 ofl.write(str(f">{record.id}\n{record.seq}\n").encode())
             else:
+                invalid["taxon"].append(record.id)
+                invalid["excluded"].append(f"duplicate")
                 efl.write(str(f">{record.id}\n{record.seq}\n").encode())
     logger.info(f"{n_valid} sequences saved from file")
     info_df = pd.DataFrame.from_dict (seq_info, orient='index', columns = ["freq_ACGT", "freq_N", "seq_hash"])
-    return info_df 
+    return info_df, pd.DataFrame(invalid)
 
 def read_fasta_new_only (fastafile, prev_seqnames = [], min_length = 10000, ambig = 0.8, check_name = False):
     sequences = []
