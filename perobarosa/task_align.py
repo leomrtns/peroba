@@ -23,7 +23,8 @@ def align (fastafile, defaults, alignment = None, csv = None, output = None, len
     aln_seqnames = set()
     for aln in alignment:
         logger.debug(f"Reading alignment {aln}") 
-        aln_seqnames.update(read_fasta_headers (aln))
+        seqnames, _ = read_fasta_headers (aln, update_set = None)
+        aln_seqnames.update(seqnames)
     aln_seqnames = set(aln_seqnames) ## much faster lookup than list
 
     if csv is not None:

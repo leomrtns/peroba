@@ -20,19 +20,19 @@ def clean_gisaid_name (description):
     seqname = seqname.replace("'","-") # Coted-Ivoire
     return seqname.replace("hCoV-19/","")
 
-
 def get_extra_cols_from_record (seq, trim=500):
     seq = seq.upper()
     vals =  [
-            sum([seq.count(nuc) for nuc in ["A", "C", "G", "T"]]),
-            sum([seq.count(nuc) for nuc in ["N", "-"]]),
-            str(xxhash.xxh32(str(seq[trim:-trim])).hexdigest())
+            int(sum([seq.count(nuc) for nuc in ["A", "C", "G", "T"]])),
+            int(sum([seq.count(nuc) for nuc in ["N", "-"]])),
+            str(xxhash.xxh32_hexdigest(str(seq[trim:-trim]))) # alias of xxh32().hexdigest()
             ]
     return vals
 
 def read_fasta_headers (filename, check_name = False, trim=500, update_set = None):
     seqnames = []
-    if update_set is not None: seq_info = dict()  ## default is to calcualte only for list
+    n_valid = 0
+    if update_set is not None: seq_info = dict()  ## default is to calculate only for list (used also by align tasks, which don't care about table)
 
     with open_anyformat (filename, "r") as handle:
         for record in SeqIO.parse(handle, "fasta"):
@@ -41,11 +41,14 @@ def read_fasta_headers (filename, check_name = False, trim=500, update_set = Non
             seqnames.append(record.id)
             if update_set is not None and record.id in update_set:
                 seq_info[record.id] = get_extra_cols_from_record (record.seq, trim)
+                n_valid += 1
+                if (not n_valid%100000):  logger.info(f"Stats about {n_valid} sequences calculated")
 
     logger.info("Read %s sequence names from file %s", str(len(seqnames)), filename)
-    if update_set is None:
-        return seqnames
-    info_df = pd.DataFrame.from_dict (seq_info, orient='index', columns = ["freq_ACGT", "freq_N", "seq_hash"])
+    if update_set is None or not seq_info:
+        info_df = None
+    else:
+        info_df = pd.DataFrame.from_dict (seq_info, orient='index', columns = ["freq_ACGT", "freq_N", "seq_hash"])
     return seqnames, info_df 
 
 def read_fasta_as_list (filename, fragment_size = 0, check_name = False):

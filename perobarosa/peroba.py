@@ -30,7 +30,7 @@ def run_metadata (args):
     from perobarosa import task_metadata
     if args.timestamp is not None and not args.timestamp.isdigit():
         logger.warning(f"provided timestamp '{args.timestamp}' is not numeric, may cause problems downstream. Ideally it would be a YearMonthDay")
-    task_metadata.metadata (args.metadata, defaults, args.alignments, args.csv, args.output, args.timestamp)
+    task_metadata.metadata (args.metadata, defaults, args.alignments, args.csv, args.output, args.timestamp, args.force)
 
 def run_merge (args):
     from perobarosa import task_metadata
@@ -77,6 +77,7 @@ def main():
     up_aln.add_argument('-c', '--csv', metavar='csv[.gz]', help="optional existing gisaid_meta table (usually from previous round)")
     up_aln.add_argument('-o', '--output', metavar='tsv', help="optional custom output file")
     up_aln.add_argument('-t', '--timestamp', help="optional timestamp for new entries. You can safely ignore it, otherwise use format YYMMDD")
+    up_aln.add_argument('-f', '--force', default=False, action='store_true', help="Force calculation of seq stats (slow but more complete metadata)")
     up_aln.set_defaults(func = run_metadata)
 
     up_aln = subp.add_parser('merge', help="merge metadata and alignment ")
