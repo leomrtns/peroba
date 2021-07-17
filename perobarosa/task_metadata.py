@@ -36,7 +36,7 @@ def metadata (metadata_file, defaults, alignment = None, csvfile = None, output 
             sys.exit(1)
         xtra_columns = [x for x in peroba_xtracol if x in csv.columns]
         if (len(xtra_columns) > 0):
-            logger.info(f"Found extra columns (freq_ACGT etc.) in peroba metadata")
+            logger.info(f"Good, found extra columns (freq_ACGT etc.) in peroba metadata {csvfile}")
             keep_columns += xtra_columns
             has_extra_columns = True
         csv = csv[keep_columns]  ## reorder s.t. "strain" comes first etc
@@ -52,7 +52,7 @@ def metadata (metadata_file, defaults, alignment = None, csvfile = None, output 
         logger.info(f"Assuming {metadata_file} is already in peroba format")
         xtra_columns = [x for x in peroba_xtracol if x in df0.columns]
         if (len(xtra_columns) > 0):
-            logger.info(f"Found extra columns (freq_ACGT etc.) in {metadata_file}")
+            logger.info(f"Good, found extra columns (freq_ACGT etc.) in new {metadata_file}")
             keep_columns += xtra_columns
             has_extra_columns = True
         df = df0[keep_columns]
@@ -106,15 +106,17 @@ def metadata (metadata_file, defaults, alignment = None, csvfile = None, output 
         logger.info("Examples of duplicate names:\n%s   etc.\n", "\n".join([x[0] for x in dup_seqs]))
 
     # if metadata has extra columns with sequence stats, then we just update from missing seqs
-    if has_extra_columns:
-        missing_freq_set = set(df.loc[df["freq_ACGT"].isnull(), "strain"].unique())
-        logger.info("Extra columns found; will calculate seq stats for %d samples", len(missing_freq_set))
-    elif calc_seqs is True:
-        logger.info("Extra columns not found but will calculate from scratch seq stats")
-        missing_freq_set = set(df["strain"].unique())
-    else:
-        logger.info("Extra columns not found and no seq stats calculation will take place (add '-f' next time to force it)")
-        missing_freq_set = None
+
+    if alignment is not None:
+        if has_extra_columns:
+            missing_freq_set = set(df.loc[df["freq_ACGT"].isnull(), "strain"].unique())
+            logger.info("Extra columns found; will calculate seq stats for %d samples", len(missing_freq_set))
+        elif calc_seqs is True:
+            logger.info("Extra columns not found but will calculate from scratch seq stats")
+            missing_freq_set = set(df["strain"].unique())
+        else:
+            logger.info("Extra columns not found and no seq stats calculation will take place (add '-f' next time to force it)")
+            missing_freq_set = None
 
     # read existing alignments
     aln_seqnames = set()
@@ -153,10 +155,11 @@ def metadata (metadata_file, defaults, alignment = None, csvfile = None, output 
 
     keep_columns = [x for x in peroba_columns + peroba_xtracol if x in df.columns]
     df = df[keep_columns] # reorder columns
+    # some freq_ACGT are missing, this astype(int) does not work (NaN is a float)
     if "freq_ACGT" in keep_columns:
-        df["freq_ACGT"] = df["freq_ACGT"].astype(int)
+        df["freq_ACGT"] = df["freq_ACGT"].astype('float').astype(pd.Int32Dtype()) ## object -> float -> nullable integer (Int, not int)
     if "freq_N" in keep_columns:
-        df["freq_N"] = df["freq_N"].astype(int)
+        df["freq_N"] = df["freq_N"].astype('float').astype(pd.Int32Dtype())
     logger.info (f"Saving peroba metadata file into {output}")
     df.to_csv (output, sep="\t", index=False)
     return
@@ -292,7 +295,7 @@ def merge (metadata, alignment, defaults):
         csv = csv.combine_first (df) ## df will only be added if absent from csv ## python suggests "sort=False" here
         if invalid is None:
             invalid = inval_df
-        elif len(inval_df):
+        elif inval_df is not None and len (inval_df):
             invalid = pd.concat([invalid, inval_df])
     ofl.close()
     efl.close()
@@ -307,3 +310,22 @@ def merge (metadata, alignment, defaults):
     csv = csv[peroba_columns + peroba_xtracol] # reorders columns
     logger.info(f"Saving metadata file {csv_ofile}")
     csv.to_csv (csv_ofile, sep="\t", index=False)
+
+def stats (alignment, defaults):
+    csv_ofile = defaults["current_dir"] + "peroba_stats." +  defaults["timestamp"] + ".tsv.xz"
+    csv = None
+    for aln in alignment:
+        logger.info(f"Reading alignment {aln}") 
+        stat_df = read_fasta_calc_stats_only (aln)
+        if csv is None:
+            csv = stat_df 
+        elif stat_df is not None and len(stat_df):
+            csv = pd.concat([csv, stat_df])
+    if csv is not None and len(csv):
+        logger.info(f"Saving metadata file {csv_ofile}")
+        csv.index.name = "strain"
+        csv.to_csv (csv_ofile, sep="\t", index=True)
+    else:
+        logger.warning("No stats were calculated, no sequences found")
+
+

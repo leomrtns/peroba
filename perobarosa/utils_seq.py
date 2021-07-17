@@ -29,7 +29,24 @@ def get_extra_cols_from_record (seq, trim=500):
             ]
     return vals
 
-def read_fasta_headers (filename, check_name = False, trim=500, update_set = None):
+def read_fasta_calc_stats_only (filename, check_name = True, trim=500):
+    n_valid = 0
+    seq_info = dict()
+
+    with open_anyformat (filename, "r") as handle:
+        for record in SeqIO.parse(handle, "fasta"):
+            if (check_name and "|" in record.description): # consensus from COGUK and GISAID names: `hCoV-19/Australia/NT12/2020|EPI_ISL_426900|2020-03-25`
+                record.id = clean_gisaid_name (record.description) 
+            seq_info[record.id] = get_extra_cols_from_record (record.seq, trim)
+            n_valid += 1
+            if (not n_valid%100000):  logger.info(f"Stats about {n_valid} sequences calculated")
+    logger.info("Calculated %s sequence stats from file %s", str(len(seq_info)), filename)
+    if not seq_info:
+        return None
+    else:
+        return pd.DataFrame.from_dict (seq_info, orient='index', columns = ["freq_ACGT", "freq_N", "seq_hash"])
+
+def read_fasta_headers (filename, check_name = True, trim=500, update_set = None):
     seqnames = []
     n_valid = 0
     if update_set is not None: seq_info = dict()  ## default is to calculate only for list (used also by align tasks, which don't care about table)
@@ -48,6 +65,7 @@ def read_fasta_headers (filename, check_name = False, trim=500, update_set = Non
     if update_set is None or not seq_info:
         info_df = None
     else:
+        logger.info("Calculated %s sequence stats from file %s", str(len(seq_info)), filename)
         info_df = pd.DataFrame.from_dict (seq_info, orient='index', columns = ["freq_ACGT", "freq_N", "seq_hash"])
     return seqnames, info_df 
 

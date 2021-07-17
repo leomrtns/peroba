@@ -42,6 +42,13 @@ def run_merge (args):
         sys.exit(2)
     task_metadata.merge (args.csv, args.alignments, defaults)
 
+def run_stats (args):
+    from perobarosa import task_metadata
+    if (args.alignments is None):
+        logger.error("Missing alignment files (may be several, if incremental)")
+        sys.exit(2)
+    task_metadata.stats (args.alignments, defaults)
+
 class ParserWithErrorHelp(argparse.ArgumentParser):
     def error(self, message):
         sys.stderr.write('error: %s\n' % message)
@@ -84,6 +91,10 @@ def main():
     up_aln.add_argument('-a', '--alignments', metavar='aln', nargs="+", help="files with aligned sequences from which samples are selected")
     up_aln.add_argument('-c', '--csv', metavar='csv[.gz]', help="gisaid_meta table")
     up_aln.set_defaults(func = run_merge)
+
+    up_aln = subp.add_parser('stats', help="calculate sequence statistics (freq_ACGT, hash, etc.)")
+    up_aln.add_argument('alignments', nargs="+", help="files with aligned sequences from which stats are calculated")
+    up_aln.set_defaults(func = run_stats)
 
     args = parser.parse_args()
 

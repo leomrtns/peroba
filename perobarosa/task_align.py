@@ -18,14 +18,15 @@ def align (fastafile, defaults, alignment = None, csv = None, output = None, len
     logger.info (f"Will exclude sequences with proportion of Ns higher than {ambiguous} or shorter than {length}");
 
     # read existing alignments
-    if alignment is None: logger.info (f"No alignment given; will align all sequences from fasta file")
-    else:                 logger.info (f"Will read all alignment files and store sequence names")
     aln_seqnames = set()
-    for aln in alignment:
-        logger.debug(f"Reading alignment {aln}") 
-        seqnames, _ = read_fasta_headers (aln, update_set = None)
-        aln_seqnames.update(seqnames)
-    aln_seqnames = set(aln_seqnames) ## much faster lookup than list
+    if alignment is None: logger.info (f"No alignment given; will align all sequences from fasta file")
+    else:                 
+        logger.info (f"Will read all alignment files and store sequence names")
+        for aln in alignment:
+            logger.debug(f"Reading alignment {aln}") 
+            seqnames, _ = read_fasta_headers (aln, update_set = None)
+            aln_seqnames.update(seqnames)
+        aln_seqnames = set(aln_seqnames) ## much faster lookup than list
 
     if csv is not None:
         for fname in csv:
