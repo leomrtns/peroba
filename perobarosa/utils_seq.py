@@ -130,6 +130,7 @@ def read_fasta_new_only (fastafile, prev_seqnames = [], min_length = 10000, ambi
                     invalid["taxon"].append(record.id)
                     invalid["excluded"].append(f"len={this_len}")
                     logger.debug (f"Sequence {record.id} too short, has only {this_len} sites")
+    logger.info(f"Total of {n_valid} sequences read")
     if len (invalid["taxon"]): logger.warning ("Number of sequences excluded due to short length or highly ambiguous: %s", len(invalid["taxon"]))
     return sequences, pd.DataFrame(invalid)
 

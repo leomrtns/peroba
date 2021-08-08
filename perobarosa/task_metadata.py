@@ -100,8 +100,7 @@ def metadata (metadata_file, defaults, alignment = None, csvfile = None, output 
     # check if several rows may have same sequence name
     n_unique = df.shape[0] - len(df["strain"].unique())
     if (n_unique > 0): 
-        logger.warning((f"{n_unique} rows have same name; this is bad practice by GISAID but it's not a bug;" 
-                "'peroba align' dedups sequences by default, but other software may fail if several sequences have same name"))
+        logger.warning((f"{n_unique} rows have same name; peroba shortens GISAID sequences to be compatible with nextstrain and COGUK (by removing the date suffix;"))
         dup_seqs = collections.Counter(df["strain"]).most_common(10)
         logger.info("Examples of duplicate names:\n%s   etc.\n", "\n".join([x[0] for x in dup_seqs]))
 
