@@ -3,6 +3,7 @@
 __Leonardo de Oliveira Martins<sup>1</sup>__
 <br>
 <sub>1. Quadram Institute Bioscience, Norwich Research Park, NR4 7UQ, UK</sub>
+<img src="recipe/peroba-logo.png" height="100" align="right" alt="AI drawing of a tree">
 
 ## Introduction
 **peroba** is a tool for continuous updating of outbreak information as new sequences are

@@ -1,6 +1,6 @@
 import os, logging, xxhash, numpy as np, pandas as pd
 from Bio import Seq, SeqIO
-import random, datetime, sys, re, glob, collections, subprocess, itertools, pathlib, base64
+import random, datetime, sys, re, glob, collections, subprocess, itertools, pathlib, base64, string
 import lzma, gzip, bz2
 
 
@@ -14,18 +14,30 @@ logger.addHandler(stream_log)
 
 # GISAID sequence names for non-humans start with following prefixes (like hCoV-19/env, hCoV-19/mink etc):
 non_human_prefix = ["canine", "leopard", "monkey", "hamster", "gorilla", "mouse", "tiger", "bat", "pangolin", "lion", "dog", "cat", "mink", "env"]
+base62 = string.digits + string.ascii_letters + '_.-+~@'  # 66 elements actually (62 is alphanum only)
+len_base62 = len (base62)
 
 def clean_gisaid_name (description):
     seqname = re.sub("\s+","", description.split("|")[0])
     seqname = seqname.replace("'","-") # Coted-Ivoire
     return seqname.replace("hCoV-19/","")
 
-def get_extra_cols_from_record (seq, trim=500):
+def int_to_base62 (integer): # https://stackoverflow.com/questions/1119722/base-62-conversion
+    if integer == 0:
+        return base62[0]
+    ret = ''
+    while integer != 0:
+        ret = base62[integer % len_base62] + ret
+        integer //= len_base62
+    return ret
+
+def get_extra_cols_from_record (seq, trim=230):
     seq = seq.upper()
     vals =  [
-            int(sum([seq.count(nuc) for nuc in ["A", "C", "G", "T"]])),
+            int(sum([seq[trim:-trim].count(nuc) for nuc in ["A", "C", "G", "T"]])),
             int(sum([seq.count(nuc) for nuc in ["N", "-"]])),
-            str(xxhash.xxh32_hexdigest(str(seq[trim:-trim]))) # alias of xxh32().hexdigest()
+            #str(xxhash.xxh32_hexdigest(str(seq[trim:-trim]))) # alias of xxh32().hexdigest()
+            int_to_base62(xxhash.xxh128_intdigest(str(seq[trim:-trim]))) # alias of xxh3_128_intdigest()
             ]
     return vals
 

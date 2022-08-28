@@ -107,12 +107,14 @@ def metadata (metadata_file, defaults, alignment = None, csvfile = None, output 
     # if metadata has extra columns with sequence stats, then we just update from missing seqs
 
     if alignment is not None:
-        if has_extra_columns:
+        if has_extra_columns and calc_seqs is False:
             missing_freq_set = set(df.loc[df["freq_ACGT"].isnull(), "strain"].unique())
             logger.info("Extra columns found; will calculate seq stats for %d samples", len(missing_freq_set))
         elif calc_seqs is True:
-            logger.info("Extra columns not found but will calculate from scratch seq stats")
+            logger.info("Will calculate sequence stats from scratch for all sequences")
             missing_freq_set = set(df["strain"].unique())
+            xtra = [x for x in peroba_xtracol if x in df.columns] ## works if df has columns or not
+            df.drop(columns=xtra, inplace=True)
         else:
             logger.info("Extra columns not found and no seq stats calculation will take place (add '-f' next time to force it)")
             missing_freq_set = None

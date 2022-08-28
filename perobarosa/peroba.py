@@ -78,7 +78,7 @@ def main():
     up_aln.add_argument('-l', '--length', metavar='int', help="exclude sequences shorter than this (default = 28k)")
     up_aln.set_defaults(func = run_align)
 
-    up_aln = subp.add_parser('metadata', help="extract minimal metadata fom GISAID (fixing sequence names), adding to existing metadata")
+    up_aln = subp.add_parser('metadata', help="extract minimal metadata fom GISAID (fixing sequence names), adding to existing metadata (freq_ACGT is trimmed freq_N is total)")
     up_aln.add_argument('metadata', metavar = "tsv[.gz]", help="metadata_tsv file from GISAID (may have spaces in sequence names")
     up_aln.add_argument('-a', '--alignments', metavar='aln', nargs="+", help="optional files with aligned sequences from which samples are selected")
     up_aln.add_argument('-c', '--csv', metavar='csv[.gz]', help="optional existing gisaid_meta table (usually from previous round)")
@@ -92,7 +92,7 @@ def main():
     up_aln.add_argument('-c', '--csv', metavar='csv[.gz]', help="gisaid_meta table")
     up_aln.set_defaults(func = run_merge)
 
-    up_aln = subp.add_parser('stats', help="calculate sequence statistics (freq_ACGT, hash, etc.)")
+    up_aln = subp.add_parser('stats', help="calculate sequence statistics (freq_ACGT, hash, etc.) Notice that freq_AGCT is for trimmed and freq_N is total")
     up_aln.add_argument('alignments', nargs="+", help="files with aligned sequences from which stats are calculated")
     up_aln.set_defaults(func = run_stats)
 

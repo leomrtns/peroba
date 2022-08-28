@@ -12,7 +12,7 @@ dependencies:
   - scikit-learn 
   - treeswift
   - ete3
-  - python-xxhash
+  - python-xxhash>2.0.0 # equiv to xxhash 0.8.0
   - mafft>7.467
   - xz
     #- oauth2client

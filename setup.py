@@ -52,7 +52,7 @@ setuptools.setup(
            #'basemap',
            #'geopandas',
 #           'treeswift',
-           'xxhash',
+           'xxhash >= 0.8.0', # equiv to python-xxhash 2.0.0
            #'pandas_profiling',
            'scikit-learn'
        ],
